@@ -3,7 +3,7 @@
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.1.2
+ * Version: 3.1.3
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ class RivianTrackr_AI_Search {
     private $option_name         = 'rt_ai_search_options';
     private $models_cache_option = 'rt_ai_search_models_cache';
     private $cache_keys_option   = 'rt_ai_search_cache_keys';
-    private $cache_prefix        = 'rt_ai_search_v3_1_2_';
+    private $cache_prefix        = 'rt_ai_search_v3_1_3_';
     private $cache_ttl           = 3600;
 
     private $logs_table_checked = false;
@@ -28,7 +28,10 @@ class RivianTrackr_AI_Search {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
+
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
+
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
     }
 
@@ -361,6 +364,42 @@ class RivianTrackr_AI_Search {
     }
 
     /* ---------------------------------------------------------
+     *  Frontend assets (CSS/JS)
+     * --------------------------------------------------------- */
+
+    public function enqueue_frontend_assets() {
+        if ( is_admin() ) {
+            return;
+        }
+
+        if ( ! is_search() ) {
+            return;
+        }
+
+        $options = $this->get_options();
+        if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
+            return;
+        }
+
+        $ver = '3.1.3';
+
+        $css_url = plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.css';
+        $js_url  = plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.js';
+
+        wp_enqueue_style( 'rt-ai-search', $css_url, array(), $ver );
+        wp_enqueue_script( 'rt-ai-search', $js_url, array(), $ver, true );
+
+        wp_localize_script(
+            'rt-ai-search',
+            'RTAISearch',
+            array(
+                'endpoint' => esc_url_raw( rest_url( 'rt-ai-search/v1/summary' ) ),
+                'query'    => get_search_query(),
+            )
+        );
+    }
+
+    /* ---------------------------------------------------------
      *  Model list helpers
      * --------------------------------------------------------- */
 
@@ -674,7 +713,7 @@ class RivianTrackr_AI_Search {
         $table_name = self::get_logs_table_name();
 
         $totals = $wpdb->get_row(
-            "SELECT
+            "SELECT 
                 COUNT(*) AS total,
                 SUM(ai_success) AS success_count,
                 SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count
@@ -686,22 +725,20 @@ class RivianTrackr_AI_Search {
         $error_count    = $totals ? (int) $totals->error_count : 0;
         $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
 
-        $no_results_count = $wpdb->get_var(
+        $no_results_count = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
         );
-        $no_results_count = (int) $no_results_count;
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
-        $last_24   = $wpdb->get_var(
+        $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
                 $since_24h
             )
         );
-        $last_24 = (int) $last_24;
 
         $daily_stats = $wpdb->get_results(
-            "SELECT
+            "SELECT 
                 DATE(created_at) AS day,
                 COUNT(*) AS total,
                 SUM(ai_success) AS success_count
@@ -735,7 +772,6 @@ class RivianTrackr_AI_Search {
              LIMIT 50"
         );
         ?>
-
         <h2>Overview</h2>
         <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
             <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
@@ -923,13 +959,12 @@ class RivianTrackr_AI_Search {
         $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
-        $last_24   = $wpdb->get_var(
+        $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
                 $since_24h
             )
         );
-        $last_24 = (int) $last_24;
 
         $top_queries = $wpdb->get_results(
             "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
@@ -990,123 +1025,6 @@ class RivianTrackr_AI_Search {
     }
 
     /* ---------------------------------------------------------
-     *  Relevance scoring helpers
-     * --------------------------------------------------------- */
-
-    private function normalize_text( $text ) {
-        $text = (string) $text;
-        $text = strtolower( $text );
-        $text = wp_strip_all_tags( $text );
-        $text = preg_replace( '/[^a-z0-9\s]+/i', ' ', $text );
-        $text = preg_replace( '/\s+/', ' ', $text );
-        return trim( $text );
-    }
-
-    private function query_tokens( $query ) {
-        $q = $this->normalize_text( $query );
-        if ( $q === '' ) {
-            return array();
-        }
-
-        $parts = explode( ' ', $q );
-
-        $tokens = array();
-        foreach ( $parts as $t ) {
-            $t = trim( $t );
-            if ( strlen( $t ) >= 3 ) {
-                $tokens[] = $t;
-            }
-        }
-
-        return array_values( array_unique( $tokens ) );
-    }
-
-    private function post_term_text( $post_id ) {
-        $names = array();
-
-        $cats = wp_get_post_terms( $post_id, 'category', array( 'fields' => 'names' ) );
-        if ( is_array( $cats ) ) {
-            $names = array_merge( $names, $cats );
-        }
-
-        $tags = wp_get_post_terms( $post_id, 'post_tag', array( 'fields' => 'names' ) );
-        if ( is_array( $tags ) ) {
-            $names = array_merge( $names, $tags );
-        }
-
-        if ( empty( $names ) ) {
-            return '';
-        }
-
-        return $this->normalize_text( implode( ' ', $names ) );
-    }
-
-    private function score_post_for_query( $search_query, $tokens, $post ) {
-        $score = 0;
-
-        $q_norm = $this->normalize_text( $search_query );
-
-        $title   = $this->normalize_text( get_the_title( $post ) );
-        $content = $this->normalize_text( $post->post_content );
-        $terms   = $this->post_term_text( $post->ID );
-
-        if ( $q_norm !== '' && $title !== '' ) {
-            if ( strpos( $title, $q_norm ) !== false ) {
-                $score += 20;
-            }
-        }
-
-        $title_hits = 0;
-        foreach ( $tokens as $t ) {
-            if ( $t !== '' && strpos( $title, $t ) !== false ) {
-                $title_hits++;
-            }
-        }
-
-        if ( $title_hits > 0 ) {
-            $score += 5;
-            $score += min( 10, $title_hits * 2 );
-        }
-
-        $term_hits = 0;
-        foreach ( $tokens as $t ) {
-            if ( $t !== '' && $terms !== '' && strpos( $terms, $t ) !== false ) {
-                $term_hits++;
-            }
-        }
-        if ( $term_hits > 0 ) {
-            $score += 4;
-            $score += min( 6, $term_hits );
-        }
-
-        $content_hits = 0;
-        foreach ( $tokens as $t ) {
-            if ( $t !== '' && $content !== '' && strpos( $content, $t ) !== false ) {
-                $content_hits++;
-            }
-        }
-        if ( $content_hits > 0 ) {
-            $score += 2;
-            $score += min( 8, $content_hits );
-        }
-
-        $post_ts = strtotime( $post->post_date_gmt ? $post->post_date_gmt : $post->post_date );
-        if ( $post_ts ) {
-            $age_days = ( time() - $post_ts ) / DAY_IN_SECONDS;
-
-            if ( $age_days <= 7 ) {
-                $score += 6;
-            } elseif ( $age_days <= 30 ) {
-                $score += 3;
-            } elseif ( $age_days <= 180 ) {
-                $score += 1;
-            }
-        }
-
-        return $score;
-    }
-
-    /* ---------------------------------------------------------
      *  Frontend placeholder
      * --------------------------------------------------------- */
 
@@ -1127,7 +1045,6 @@ class RivianTrackr_AI_Search {
         $done = true;
 
         $search_query = get_search_query();
-        $rest_url     = esc_url_raw( rest_url( 'rt-ai-search/v1/summary' ) );
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
@@ -1141,8 +1058,7 @@ class RivianTrackr_AI_Search {
                     </span>
                 </div>
 
-                <div id="rt-ai-search-summary-content"
-                     class="rt-ai-search-summary-content">
+                <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content">
                     <span class="rt-ai-spinner"></span>
                     <p class="rt-ai-loading-text">Generating summary based on your search and RivianTrackr articles...</p>
                 </div>
@@ -1152,212 +1068,6 @@ class RivianTrackr_AI_Search {
                 </div>
             </div>
         </div>
-        <style>
-            @keyframes rt-ai-spin {
-                to { transform: rotate(360deg); }
-            }
-
-            .rt-ai-search-summary-content {
-                display:flex;
-                align-items:center;
-                gap:0.5rem;
-                margin-top:0.75rem;
-            }
-
-            .rt-ai-spinner {
-                width:14px;
-                height:14px;
-                border-radius:50%;
-                border:2px solid rgba(148,163,184,0.5);
-                border-top-color:#22c55e;
-                display:inline-block;
-                animation:rt-ai-spin 0.7s linear infinite;
-                flex-shrink:0;
-            }
-
-            .rt-ai-loading-text {
-                margin:0;
-                opacity:0.8;
-            }
-
-            .rt-ai-search-summary-content.rt-ai-loaded {
-                display:block;
-            }
-
-            .rt-ai-search-summary-content.rt-ai-loaded > * {
-                display:block;
-                width:100%;
-                max-width:100%;
-                margin-bottom:0.75rem;
-            }
-
-            .rt-ai-search-summary-content.rt-ai-loaded > *:last-child {
-                margin-bottom:0;
-            }
-
-            .rt-ai-openai-badge {
-                display:inline-flex;
-                align-items:center;
-                gap:0.35rem;
-                padding:0.15rem 0.55rem;
-                border-radius:999px;
-                border:1px solid rgba(148,163,184,0.5);
-                background:rgba(15,23,42,0.9);
-                font-size:0.7rem;
-                text-transform:uppercase;
-                letter-spacing:0.08em;
-                white-space:nowrap;
-                opacity:0.95;
-            }
-
-            .rt-ai-openai-mark {
-                width:10px;
-                height:10px;
-                border-radius:999px;
-                border:1px solid rgba(148,163,184,0.8);
-                position:relative;
-                flex-shrink:0;
-            }
-
-            .rt-ai-openai-mark::after {
-                content:'';
-                position:absolute;
-                inset:2px;
-                border-radius:999px;
-                background:linear-gradient(135deg,#22c55e,#3b82f6);
-            }
-
-            .rt-ai-openai-text {
-                opacity:0.9;
-            }
-
-            .rt-ai-sources {
-                margin-top:1rem;
-                font-size:0.85rem;
-            }
-
-            .rt-ai-sources-toggle {
-                border:none;
-                background:none;
-                padding:0;
-                margin:0 0 0.4rem 0;
-                font-size:0.85rem;
-                cursor:pointer;
-                text-decoration:underline;
-                text-underline-offset:2px;
-                opacity:0.95;
-                color:#e5e7eb;
-            }
-
-            .rt-ai-sources-toggle:hover {
-                opacity:1;
-            }
-
-            .rt-ai-sources-list {
-                margin:0;
-                padding-left:1.1rem;
-                font-size:0.85rem;
-            }
-
-            .rt-ai-sources-list li {
-                margin-bottom:0.4rem;
-            }
-
-            .rt-ai-sources-list li:last-child {
-                margin-bottom:0;
-            }
-
-            .rt-ai-sources-list a {
-                color:#22c55e;
-                text-decoration:underline;
-                text-underline-offset:2px;
-            }
-
-            .rt-ai-sources-list a:hover {
-                opacity:0.9;
-            }
-
-            .rt-ai-sources-list span {
-                display:block;
-                opacity:0.8;
-                color:#cbd5f5;
-            }
-
-            @media (max-width: 640px) {
-                .rt-ai-summary-header {
-                    flex-direction:column;
-                    align-items:flex-start;
-                }
-
-                .rt-ai-summary-header h2 {
-                    font-size:1rem;
-                }
-
-                .rt-ai-openai-badge {
-                    margin-top:0.15rem;
-                }
-
-                .rt-ai-search-summary-content {
-                    align-items:flex-start;
-                }
-            }
-        </style>
-        <script>
-        (function() {
-            var container = document.getElementById('rt-ai-search-summary-content');
-            if (!container) return;
-
-            var q = <?php echo wp_json_encode( $search_query ); ?>;
-            if (!q) return;
-
-            var endpoint = '<?php echo $rest_url; ?>' + '?q=' + encodeURIComponent(q);
-
-            fetch(endpoint, { credentials: 'same-origin' })
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    container.classList.add('rt-ai-loaded');
-                    if (data && data.answer_html) {
-                        container.innerHTML = data.answer_html;
-                    } else if (data && data.error) {
-                        container.innerHTML = '<p style="margin:0; opacity:0.8;">' + data.error + '</p>';
-                    } else {
-                        container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
-                    }
-                })
-                .catch(function() {
-                    container.classList.add('rt-ai-loaded');
-                    container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
-                });
-
-            document.addEventListener('click', function(e) {
-                var btn = e.target.closest('.rt-ai-sources-toggle');
-                if (!btn) return;
-
-                var wrapper = btn.closest('.rt-ai-sources');
-                if (!wrapper) return;
-
-                var list = wrapper.querySelector('.rt-ai-sources-list');
-                if (!list) return;
-
-                var isHidden = list.hasAttribute('hidden');
-                var showLabel = btn.getAttribute('data-label-show') || 'Show sources';
-                var hideLabel = btn.getAttribute('data-label-hide') || 'Hide sources';
-
-                if (isHidden) {
-                    list.removeAttribute('hidden');
-                    btn.textContent = hideLabel;
-                } else {
-                    list.setAttribute('hidden', 'hidden');
-                    btn.textContent = showLabel;
-                }
-            });
-        })();
-        </script>
         <?php
     }
 
@@ -1416,63 +1126,112 @@ class RivianTrackr_AI_Search {
 
         $post_type = 'any';
 
-        // Pull a larger candidate pool, then score and select the best results.
-        $candidate_limit = max( 20, min( 60, $max_posts * 8 ) );
+        $posts_for_ai = array();
+        $used_ids     = array();
 
-        $candidate_args = array(
-            's'                   => $search_query,
-            'post_type'           => $post_type,
-            'posts_per_page'      => $candidate_limit,
-            'post_status'         => 'publish',
-            'ignore_sticky_posts' => true,
-            'no_found_rows'       => true,
+        $recent_date = gmdate( 'Y-m-d', time() - 30 * DAY_IN_SECONDS );
+
+        $recent_args = array(
+            's'              => $search_query,
+            'post_type'      => $post_type,
+            'posts_per_page' => $max_posts,
+            'post_status'    => 'publish',
+            'date_query'     => array(
+                array(
+                    'after'     => $recent_date,
+                    'inclusive' => true,
+                    'column'    => 'post_date',
+                ),
+            ),
         );
 
-        $candidate_query = new WP_Query( $candidate_args );
-        $candidates      = $candidate_query->have_posts() ? $candidate_query->posts : array();
+        $recent_query = new WP_Query( $recent_args );
 
-        $tokens = $this->query_tokens( $search_query );
+        if ( $recent_query->have_posts() ) {
+            foreach ( $recent_query->posts as $post ) {
+                $used_ids[] = $post->ID;
 
-        $scored = array();
-        foreach ( $candidates as $post ) {
-            $score = $this->score_post_for_query( $search_query, $tokens, $post );
+                $content = wp_strip_all_tags( $post->post_content );
+                $content = mb_substr( $content, 0, 400 );
 
-            $scored[] = array(
-                'post'  => $post,
-                'score' => $score,
-                'date'  => strtotime( $post->post_date_gmt ? $post->post_date_gmt : $post->post_date ),
-            );
+                $posts_for_ai[] = array(
+                    'id'      => $post->ID,
+                    'title'   => get_the_title( $post ),
+                    'url'     => get_permalink( $post ),
+                    'excerpt' => mb_substr( $content, 0, 200 ),
+                    'content' => $content,
+                    'type'    => $post->post_type,
+                    'date'    => get_the_date( 'Y-m-d', $post ),
+                );
+            }
         }
 
-        usort( $scored, function( $a, $b ) {
-            if ( $a['score'] === $b['score'] ) {
-                $ad = isset( $a['date'] ) ? (int) $a['date'] : 0;
-                $bd = isset( $b['date'] ) ? (int) $b['date'] : 0;
-                return $bd <=> $ad;
-            }
-            return $b['score'] <=> $a['score'];
-        } );
-
-        $posts_for_ai = array();
-        foreach ( $scored as $row ) {
-            if ( count( $posts_for_ai ) >= $max_posts ) {
-                break;
-            }
-
-            $post = $row['post'];
-
-            $content = wp_strip_all_tags( $post->post_content );
-            $content = mb_substr( $content, 0, 400 );
-
-            $posts_for_ai[] = array(
-                'id'      => $post->ID,
-                'title'   => get_the_title( $post ),
-                'url'     => get_permalink( $post ),
-                'excerpt' => mb_substr( $content, 0, 200 ),
-                'content' => $content,
-                'type'    => $post->post_type,
-                'date'    => get_the_date( 'Y-m-d', $post ),
+        $remaining = $max_posts - count( $posts_for_ai );
+        if ( $remaining > 0 ) {
+            $older_args = array(
+                's'              => $search_query,
+                'post_type'      => $post_type,
+                'posts_per_page' => $remaining,
+                'post_status'    => 'publish',
+                'post__not_in'   => $used_ids,
+                'date_query'     => array(
+                    array(
+                        'before'    => $recent_date,
+                        'inclusive' => false,
+                        'column'    => 'post_date',
+                    ),
+                ),
             );
+
+            $older_query = new WP_Query( $older_args );
+
+            if ( $older_query->have_posts() ) {
+                foreach ( $older_query->posts as $post ) {
+                    $content = wp_strip_all_tags( $post->post_content );
+                    $content = mb_substr( $content, 0, 400 );
+
+                    $posts_for_ai[] = array(
+                        'id'      => $post->ID,
+                        'title'   => get_the_title( $post ),
+                        'url'     => get_permalink( $post ),
+                        'excerpt' => mb_substr( $content, 0, 200 ),
+                        'content' => $content,
+                        'type'    => $post->post_type,
+                        'date'    => get_the_date( 'Y-m-d', $post ),
+                    );
+                }
+            }
+        }
+
+        if ( count( $posts_for_ai ) < $max_posts ) {
+            $remaining_fallback = $max_posts - count( $posts_for_ai );
+
+            $fallback_args = array(
+                's'              => $search_query,
+                'post_type'      => $post_type,
+                'posts_per_page' => $remaining_fallback,
+                'post_status'    => 'publish',
+                'post__not_in'   => wp_list_pluck( $posts_for_ai, 'id' ),
+            );
+
+            $fallback_query = new WP_Query( $fallback_args );
+
+            if ( $fallback_query->have_posts() ) {
+                foreach ( $fallback_query->posts as $post ) {
+                    $content = wp_strip_all_tags( $post->post_content );
+                    $content = mb_substr( $content, 0, 400 );
+
+                    $posts_for_ai[] = array(
+                        'id'      => $post->ID,
+                        'title'   => get_the_title( $post ),
+                        'url'     => get_permalink( $post ),
+                        'excerpt' => mb_substr( $content, 0, 200 ),
+                        'content' => $content,
+                        'type'    => $post->post_type,
+                        'date'    => get_the_date( 'Y-m-d', $post ),
+                    );
+                }
+            }
         }
 
         $results_count = count( $posts_for_ai );
@@ -1496,16 +1255,16 @@ class RivianTrackr_AI_Search {
         $sources     = isset( $ai_data['results'] ) && is_array( $ai_data['results'] ) ? $ai_data['results'] : array();
 
         $allowed_tags = array(
-            'p'  => array(),
-            'br' => array(),
+            'p'      => array(),
+            'br'     => array(),
             'strong' => array(),
-            'em' => array(),
-            'ul' => array(),
-            'ol' => array(),
-            'li' => array(),
-            'h3' => array(),
-            'h4' => array(),
-            'a'  => array(
+            'em'     => array(),
+            'ul'     => array(),
+            'ol'     => array(),
+            'li'     => array(),
+            'h3'     => array(),
+            'h4'     => array(),
+            'a'      => array(
                 'href'   => array(),
                 'title'  => array(),
                 'target' => array(),
@@ -1697,7 +1456,7 @@ Always respond as a single JSON object using this structure:
 The results array should list up to 5 of the most relevant posts you used when creating the summary, so they can be shown as sources under the answer.";
 
         $user_message  = "User search query: {$user_query}\n\n";
-        $user_message .= "Here are the most relevant posts from the site, with newer posts preferred when relevance is similar:\n\n{$posts_text}";
+        $user_message .= "Here are the posts from the site (with newer posts listed first where possible):\n\n{$posts_text}";
 
         $supports_response_format = (
             strpos( $model, 'gpt-4o' ) === 0 ||

@@ -1,0 +1,148 @@
+@keyframes rt-ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rt-ai-search-summary-content {
+  display:flex;
+  align-items:center;
+  gap:0.5rem;
+  margin-top:0.75rem;
+}
+
+.rt-ai-spinner {
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  border:2px solid rgba(148,163,184,0.5);
+  border-top-color:#22c55e;
+  display:inline-block;
+  animation:rt-ai-spin 0.7s linear infinite;
+  flex-shrink:0;
+}
+
+.rt-ai-loading-text {
+  margin:0;
+  opacity:0.8;
+}
+
+.rt-ai-search-summary-content.rt-ai-loaded {
+  display:block;
+}
+
+.rt-ai-search-summary-content.rt-ai-loaded > * {
+  display:block;
+  width:100%;
+  max-width:100%;
+  margin-bottom:0.75rem;
+}
+
+.rt-ai-search-summary-content.rt-ai-loaded > *:last-child {
+  margin-bottom:0;
+}
+
+.rt-ai-openai-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:0.35rem;
+  padding:0.15rem 0.55rem;
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,0.5);
+  background:rgba(15,23,42,0.9);
+  font-size:0.7rem;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  white-space:nowrap;
+  opacity:0.95;
+}
+
+.rt-ai-openai-mark {
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  border:1px solid rgba(148,163,184,0.8);
+  position:relative;
+  flex-shrink:0;
+}
+
+.rt-ai-openai-mark::after {
+  content:'';
+  position:absolute;
+  inset:2px;
+  border-radius:999px;
+  background:linear-gradient(135deg,#22c55e,#3b82f6);
+}
+
+.rt-ai-openai-text {
+  opacity:0.9;
+}
+
+.rt-ai-sources {
+  margin-top:1rem;
+  font-size:0.85rem;
+}
+
+.rt-ai-sources-toggle {
+  border:none;
+  background:none;
+  padding:0;
+  margin:0 0 0.4rem 0;
+  font-size:0.85rem;
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:2px;
+  opacity:0.95;
+  color:#e5e7eb;
+}
+
+.rt-ai-sources-toggle:hover {
+  opacity:1;
+}
+
+.rt-ai-sources-list {
+  margin:0;
+  padding-left:1.1rem;
+  font-size:0.85rem;
+}
+
+.rt-ai-sources-list li {
+  margin-bottom:0.4rem;
+}
+
+.rt-ai-sources-list li:last-child {
+  margin-bottom:0;
+}
+
+.rt-ai-sources-list a {
+  color:#22c55e;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+
+.rt-ai-sources-list a:hover {
+  opacity:0.9;
+}
+
+.rt-ai-sources-list span {
+  display:block;
+  opacity:0.8;
+  color:#cbd5f5;
+}
+
+@media (max-width: 640px) {
+  .rt-ai-summary-header {
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  .rt-ai-summary-header h2 {
+    font-size:1rem;
+  }
+
+  .rt-ai-openai-badge {
+    margin-top:0.15rem;
+  }
+
+  .rt-ai-search-summary-content {
+    align-items:flex-start;
+  }
+}
