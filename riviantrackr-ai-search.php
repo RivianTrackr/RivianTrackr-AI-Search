@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: RivianTrackr AI Search
- * Plugin URI: https://riviantrackr.com
+ * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
  * Version: 3.1.1
  * Author URI: https://riviantrackr.com
