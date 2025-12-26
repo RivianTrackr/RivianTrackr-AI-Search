@@ -1613,8 +1613,8 @@ The results array should list up to 5 of the most relevant posts you used when c
         );
 
         $body = array(
-            'model'       => $model,
-            'messages'    => array(
+            'model'    => $model,
+            'messages' => array(
                 array(
                     'role'    => 'system',
                     'content' => $system_message,
@@ -1624,8 +1624,11 @@ The results array should list up to 5 of the most relevant posts you used when c
                     'content' => $user_message,
                 ),
             ),
-            'temperature' => 0.2,
         );
+
+        if ( strpos( $model, 'gpt-5' ) !== 0 ) {
+            $body['temperature'] = 0.2;
+        }
 
         if ( $supports_response_format ) {
             $body['response_format'] = array( 'type' => 'json_object' );
