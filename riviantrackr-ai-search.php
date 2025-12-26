@@ -3,7 +3,7 @@
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.1.6
+ * Version: 3.1.7
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
@@ -18,12 +18,8 @@ class RivianTrackr_AI_Search {
     private $option_name         = 'rt_ai_search_options';
     private $models_cache_option = 'rt_ai_search_models_cache';
     private $cache_keys_option   = 'rt_ai_search_cache_keys';
-
-    private $cache_prefix        = 'rt_ai_search_v3_1_6_';
+    private $cache_prefix        = 'rt_ai_search_v3_1_7_';
     private $cache_ttl           = 3600;
-
-    private $error_cache_prefix  = 'rt_ai_search_err_v3_1_6_';
-    private $error_cache_ttl     = 60;
 
     private $logs_table_checked = false;
     private $logs_table_exists  = false;
@@ -34,6 +30,16 @@ class RivianTrackr_AI_Search {
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+
+        // Adds "Settings" link on Plugins page
+        add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
+    }
+
+    public function add_plugin_settings_link( $links ) {
+        $url = admin_url( 'admin.php?page=rt-ai-search-settings' );
+        $settings_link = '<a href="' . esc_url( $url ) . '">Settings</a>';
+        array_unshift( $links, $settings_link );
+        return $links;
     }
 
     /* ---------------------------------------------------------
@@ -678,7 +684,7 @@ class RivianTrackr_AI_Search {
         $table_name = self::get_logs_table_name();
 
         $totals = $wpdb->get_row(
-            "SELECT 
+            "SELECT
                 COUNT(*) AS total,
                 SUM(ai_success) AS success_count,
                 SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count
@@ -690,22 +696,20 @@ class RivianTrackr_AI_Search {
         $error_count    = $totals ? (int) $totals->error_count : 0;
         $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
 
-        $no_results_count = $wpdb->get_var(
+        $no_results_count = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
         );
-        $no_results_count = (int) $no_results_count;
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
-        $last_24   = $wpdb->get_var(
+        $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
                 $since_24h
             )
         );
-        $last_24 = (int) $last_24;
 
         $daily_stats = $wpdb->get_results(
-            "SELECT 
+            "SELECT
                 DATE(created_at) AS day,
                 COUNT(*) AS total,
                 SUM(ai_success) AS success_count
@@ -927,13 +931,12 @@ class RivianTrackr_AI_Search {
         $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
-        $last_24   = $wpdb->get_var(
+        $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
                 $since_24h
             )
         );
-        $last_24 = (int) $last_24;
 
         $top_queries = $wpdb->get_results(
             "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
@@ -1009,15 +1012,13 @@ class RivianTrackr_AI_Search {
 
         $search_query = get_search_query();
         $rest_url     = esc_url_raw( rest_url( 'rt-ai-search/v1/summary' ) );
-
-        // Nonce works for logged-in and logged-out visitors, but it is best-effort.
-        // We keep the endpoint public, and verify nonce if present.
-        $rt_nonce = wp_create_nonce( 'rt_ai_search_summary' );
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
                 <div class="rt-ai-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
-                    <h2 style="margin:0; font-size:1.1rem;">AI summary for "<?php echo esc_html( $search_query ); ?>"</h2>
+                    <h2 style="margin:0; font-size:1.1rem;">
+                        AI summary for "<?php echo esc_html( $search_query ); ?>"
+                    </h2>
                     <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
                         <span class="rt-ai-openai-mark" aria-hidden="true"></span>
                         <span class="rt-ai-openai-text">Powered by OpenAI</span>
@@ -1037,21 +1038,58 @@ class RivianTrackr_AI_Search {
 
         <style>
             @keyframes rt-ai-spin { to { transform: rotate(360deg); } }
+
             .rt-ai-search-summary-content { display:flex; align-items:center; gap:0.5rem; margin-top:0.75rem; }
-            .rt-ai-spinner { width:14px; height:14px; border-radius:50%; border:2px solid rgba(148,163,184,0.5); border-top-color:#22c55e; display:inline-block; animation:rt-ai-spin 0.7s linear infinite; flex-shrink:0; }
+            .rt-ai-spinner {
+                width:14px; height:14px; border-radius:50%;
+                border:2px solid rgba(148,163,184,0.5);
+                border-top-color:#22c55e;
+                display:inline-block;
+                animation:rt-ai-spin 0.7s linear infinite;
+                flex-shrink:0;
+            }
             .rt-ai-loading-text { margin:0; opacity:0.8; }
+
             .rt-ai-search-summary-content.rt-ai-loaded { display:block; }
             .rt-ai-search-summary-content.rt-ai-loaded > * { display:block; width:100%; max-width:100%; margin-bottom:0.75rem; }
             .rt-ai-search-summary-content.rt-ai-loaded > *:last-child { margin-bottom:0; }
 
-            .rt-ai-openai-badge { display:inline-flex; align-items:center; gap:0.35rem; padding:0.15rem 0.55rem; border-radius:999px; border:1px solid rgba(148,163,184,0.5); background:rgba(15,23,42,0.9); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em; white-space:nowrap; opacity:0.95; }
-            .rt-ai-openai-mark { width:10px; height:10px; border-radius:999px; border:1px solid rgba(148,163,184,0.8); position:relative; flex-shrink:0; }
-            .rt-ai-openai-mark::after { content:''; position:absolute; inset:2px; border-radius:999px; background:linear-gradient(135deg,#22c55e,#3b82f6); }
+            .rt-ai-openai-badge {
+                display:inline-flex; align-items:center; gap:0.35rem;
+                padding:0.15rem 0.55rem;
+                border-radius:999px;
+                border:1px solid rgba(148,163,184,0.5);
+                background:rgba(15,23,42,0.9);
+                font-size:0.7rem;
+                text-transform:uppercase;
+                letter-spacing:0.08em;
+                white-space:nowrap;
+                opacity:0.95;
+            }
+            .rt-ai-openai-mark {
+                width:10px; height:10px; border-radius:999px;
+                border:1px solid rgba(148,163,184,0.8);
+                position:relative;
+                flex-shrink:0;
+            }
+            .rt-ai-openai-mark::after {
+                content:'';
+                position:absolute;
+                inset:2px;
+                border-radius:999px;
+                background:linear-gradient(135deg,#22c55e,#3b82f6);
+            }
             .rt-ai-openai-text { opacity:0.9; }
 
             .rt-ai-sources { margin-top:1rem; font-size:0.85rem; }
-            .rt-ai-sources-toggle { border:none; background:none; padding:0; margin:0 0 0.4rem 0; font-size:0.85rem; cursor:pointer; text-decoration:underline; text-underline-offset:2px; opacity:0.95; color:#e5e7eb; }
+            .rt-ai-sources-toggle {
+                border:none; background:none; padding:0; margin:0 0 0.4rem 0;
+                font-size:0.85rem; cursor:pointer;
+                text-decoration:underline; text-underline-offset:2px;
+                opacity:0.95; color:#e5e7eb;
+            }
             .rt-ai-sources-toggle:hover { opacity:1; }
+
             .rt-ai-sources-list { margin:0; padding-left:1.1rem; font-size:0.85rem; }
             .rt-ai-sources-list li { margin-bottom:0.4rem; }
             .rt-ai-sources-list li:last-child { margin-bottom:0; }
@@ -1075,43 +1113,27 @@ class RivianTrackr_AI_Search {
             var q = <?php echo wp_json_encode( $search_query ); ?>;
             if (!q) return;
 
-            var restUrl = '<?php echo $rest_url; ?>';
-            var rtNonce = <?php echo wp_json_encode( $rt_nonce ); ?>;
+            var endpoint = '<?php echo $rest_url; ?>' + '?q=' + encodeURIComponent(q);
 
-            // Cache busting query params help when there is aggressive caching in front of REST.
-            var endpoint = restUrl + '?q=' + encodeURIComponent(q) + '&_rt_nonce=' + encodeURIComponent(rtNonce) + '&_rt_ts=' + Date.now();
-
-            fetch(endpoint, {
-                credentials: 'same-origin',
-                headers: {
-                    'X-RT-AI-Nonce': rtNonce
-                }
-            })
-            .then(function(response) {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(function(data) {
-                container.classList.add('rt-ai-loaded');
-
-                if (data && data.answer_html) {
-                    container.innerHTML = data.answer_html;
-                    return;
-                }
-
-                var msg = 'AI summary is not available right now.';
-                if (data && data.error) msg = data.error;
-
-                if (data && data.request_id) {
-                    msg += ' [Ref: ' + data.request_id + ']';
-                }
-
-                container.innerHTML = '<p style="margin:0; opacity:0.8;">' + msg + '</p>';
-            })
-            .catch(function() {
-                container.classList.add('rt-ai-loaded');
-                container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
-            });
+            fetch(endpoint, { credentials: 'same-origin' })
+                .then(function(response) {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(function(data) {
+                    container.classList.add('rt-ai-loaded');
+                    if (data && data.answer_html) {
+                        container.innerHTML = data.answer_html;
+                    } else if (data && data.error) {
+                        container.innerHTML = '<p style="margin:0; opacity:0.8;">' + data.error + '</p>';
+                    } else {
+                        container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
+                    }
+                })
+                .catch(function() {
+                    container.classList.add('rt-ai-loaded');
+                    container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
+                });
 
             document.addEventListener('click', function(e) {
                 var btn = e.target.closest('.rt-ai-sources-toggle');
@@ -1141,7 +1163,7 @@ class RivianTrackr_AI_Search {
     }
 
     /* ---------------------------------------------------------
-     *  REST route
+     *  REST route and AI logic
      * --------------------------------------------------------- */
 
     public function register_rest_routes() {
@@ -1151,7 +1173,6 @@ class RivianTrackr_AI_Search {
             array(
                 'methods'             => 'GET',
                 'callback'            => array( $this, 'rest_get_summary' ),
-                // Endpoint remains public, we verify nonce if it is present.
                 'permission_callback' => '__return_true',
                 'args'                => array(
                     'q' => array(
@@ -1163,74 +1184,30 @@ class RivianTrackr_AI_Search {
         );
     }
 
-    private function get_request_id() {
-        try {
-            return 'rtai_' . bin2hex( random_bytes( 8 ) );
-        } catch ( Exception $e ) {
-            return 'rtai_' . uniqid();
-        }
-    }
-
-    private function verify_optional_nonce( $request ) {
-        $nonce = '';
-
-        $header = $request->get_header( 'x-rt-ai-nonce' );
-        if ( $header ) {
-            $nonce = $header;
-        }
-
-        if ( ! $nonce ) {
-            $param = $request->get_param( '_rt_nonce' );
-            if ( $param ) {
-                $nonce = $param;
-            }
-        }
-
-        if ( ! $nonce ) {
-            return false;
-        }
-
-        return (bool) wp_verify_nonce( $nonce, 'rt_ai_search_summary' );
-    }
-
     public function rest_get_summary( WP_REST_Request $request ) {
-        $request_id = $this->get_request_id();
-
         $options = $this->get_options();
 
         if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
-            $this->log_search_event( $request->get_param( 'q' ), 0, 0, '[' . $request_id . '] AI search not enabled or API key missing' );
+            $this->log_search_event( $request->get_param( 'q' ), 0, 0, 'AI search not enabled or API key missing' );
 
-            $resp = rest_ensure_response(
+            return rest_ensure_response(
                 array(
                     'answer_html' => '',
                     'error'       => 'AI search is not enabled.',
-                    'request_id'  => $request_id,
                 )
             );
-            $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
-            $resp->header( 'Pragma', 'no-cache' );
-            $resp->header( 'X-RT-AI-Request-Id', $request_id );
-            $resp->header( 'X-RT-AI-Nonce-Valid', $this->verify_optional_nonce( $request ) ? '1' : '0' );
-            return $resp;
         }
 
         $search_query = $request->get_param( 'q' );
         if ( ! $search_query ) {
-            $this->log_search_event( '', 0, 0, '[' . $request_id . '] Missing search query' );
+            $this->log_search_event( '', 0, 0, 'Missing search query' );
 
-            $resp = rest_ensure_response(
+            return rest_ensure_response(
                 array(
                     'answer_html' => '',
                     'error'       => 'Missing search query.',
-                    'request_id'  => $request_id,
                 )
             );
-            $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
-            $resp->header( 'Pragma', 'no-cache' );
-            $resp->header( 'X-RT-AI-Request-Id', $request_id );
-            $resp->header( 'X-RT-AI-Nonce-Valid', $this->verify_optional_nonce( $request ) ? '1' : '0' );
-            return $resp;
         }
 
         $max_posts = (int) $options['max_posts'];
@@ -1350,29 +1327,17 @@ class RivianTrackr_AI_Search {
 
         $results_count = count( $posts_for_ai );
         $ai_error      = '';
-
-        $ai_data = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error, $request_id );
+        $ai_data       = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error );
 
         if ( ! $ai_data ) {
-            $this->log_search_event(
-                $search_query,
-                $results_count,
-                0,
-                '[' . $request_id . '] ' . ( $ai_error ? $ai_error : 'AI summary not available' )
-            );
+            $this->log_search_event( $search_query, $results_count, 0, $ai_error ? $ai_error : 'AI summary not available' );
 
-            $resp = rest_ensure_response(
+            return rest_ensure_response(
                 array(
                     'answer_html' => '',
                     'error'       => $ai_error ? $ai_error : 'AI summary is not available right now.',
-                    'request_id'  => $request_id,
                 )
             );
-            $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
-            $resp->header( 'Pragma', 'no-cache' );
-            $resp->header( 'X-RT-AI-Request-Id', $request_id );
-            $resp->header( 'X-RT-AI-Nonce-Valid', $this->verify_optional_nonce( $request ) ? '1' : '0' );
-            return $resp;
         }
 
         $this->log_search_event( $search_query, $results_count, 1, '' );
@@ -1404,18 +1369,12 @@ class RivianTrackr_AI_Search {
             $answer_html .= $this->render_sources_html( $sources );
         }
 
-        $resp = rest_ensure_response(
+        return rest_ensure_response(
             array(
                 'answer_html' => $answer_html,
                 'error'       => '',
-                'request_id'  => $request_id,
             )
         );
-        $resp->header( 'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0' );
-        $resp->header( 'Pragma', 'no-cache' );
-        $resp->header( 'X-RT-AI-Request-Id', $request_id );
-        $resp->header( 'X-RT-AI-Nonce-Valid', $this->verify_optional_nonce( $request ) ? '1' : '0' );
-        return $resp;
     }
 
     /* ---------------------------------------------------------
@@ -1447,7 +1406,7 @@ class RivianTrackr_AI_Search {
      *  AI data + cache + JSON parsing
      * --------------------------------------------------------- */
 
-    private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '', $request_id = '' ) {
+    private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '' ) {
         $options = $this->get_options();
         if ( empty( $options['api_key'] ) || empty( $options['enable'] ) ) {
             $ai_error = 'AI search is not configured.';
@@ -1465,17 +1424,8 @@ class RivianTrackr_AI_Search {
             }
         }
 
-        // Short error backoff cache, prevents repeated OpenAI calls when something is broken.
-        $err_key    = $this->error_cache_prefix . md5( $options['model'] . '|' . $normalized_query );
-        $cached_err = get_transient( $err_key );
-        if ( $cached_err ) {
-            $ai_error = (string) $cached_err;
-            return null;
-        }
-
         if ( $this->is_rate_limited_for_ai_calls() ) {
             $ai_error = 'AI summary is temporarily unavailable due to rate limits. Please try again in a moment.';
-            set_transient( $err_key, $ai_error, $this->error_cache_ttl );
             return null;
         }
 
@@ -1483,19 +1433,16 @@ class RivianTrackr_AI_Search {
             $options['api_key'],
             $options['model'],
             $search_query,
-            $posts_for_ai,
-            $request_id
+            $posts_for_ai
         );
 
         if ( isset( $api_response['error'] ) ) {
             $ai_error = $api_response['error'];
-            set_transient( $err_key, $ai_error, $this->error_cache_ttl );
             return null;
         }
 
         if ( empty( $api_response['choices'][0]['message']['content'] ) ) {
             $ai_error = 'Empty response from OpenAI.';
-            set_transient( $err_key, $ai_error, $this->error_cache_ttl );
             return null;
         }
 
@@ -1518,7 +1465,6 @@ class RivianTrackr_AI_Search {
 
         if ( ! is_array( $decoded ) ) {
             $ai_error = 'Failed to parse OpenAI JSON response.';
-            set_transient( $err_key, $ai_error, $this->error_cache_ttl );
             return null;
         }
 
@@ -1554,13 +1500,10 @@ class RivianTrackr_AI_Search {
             update_option( $this->cache_keys_option, $keys );
         }
 
-        // Clear any error backoff once we succeed.
-        delete_transient( $err_key );
-
         return $decoded;
     }
 
-    private function call_openai_for_search( $api_key, $model, $user_query, $posts, $request_id = '' ) {
+    private function call_openai_for_search( $api_key, $model, $user_query, $posts ) {
         if ( empty( $api_key ) ) {
             return array( 'error' => 'OpenAI API key is not configured.' );
         }
@@ -1626,6 +1569,7 @@ The results array should list up to 5 of the most relevant posts you used when c
             ),
         );
 
+        // GPT-5 models reject non default temperature values, so only set temperature for non GPT-5 models
         if ( strpos( $model, 'gpt-5' ) !== 0 ) {
             $body['temperature'] = 0.2;
         }
@@ -1640,22 +1584,23 @@ The results array should list up to 5 of the most relevant posts you used when c
                 'Content-Type'  => 'application/json',
             ),
             'body'    => wp_json_encode( $body ),
-            'timeout' => 25,
+
+            // Bumped timeout to reduce cURL error 28 on slower models and larger prompts
+            'timeout' => 60,
         );
 
         $response = wp_remote_post( $endpoint, $args );
 
         if ( is_wp_error( $response ) ) {
-            $msg = $response->get_error_message();
-            error_log( '[RivianTrackr AI Search] [' . $request_id . '] API request error: ' . $msg );
-            return array( 'error' => $msg );
+            error_log( '[RivianTrackr AI Search] API request error: ' . $response->get_error_message() );
+            return array( 'error' => $response->get_error_message() );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         $body = wp_remote_retrieve_body( $response );
 
         if ( $code < 200 || $code >= 300 ) {
-            error_log( '[RivianTrackr AI Search] [' . $request_id . '] API HTTP error ' . $code . ' body: ' . $body );
+            error_log( '[RivianTrackr AI Search] API HTTP error ' . $code . ' body: ' . $body );
             $decoded_error = json_decode( $body, true );
             if ( isset( $decoded_error['error']['message'] ) ) {
                 return array( 'error' => $decoded_error['error']['message'] );
@@ -1666,7 +1611,7 @@ The results array should list up to 5 of the most relevant posts you used when c
         $decoded = json_decode( $body, true );
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
-            error_log( '[RivianTrackr AI Search] [' . $request_id . '] Failed to decode OpenAI response: ' . json_last_error_msg() );
+            error_log( '[RivianTrackr AI Search] Failed to decode OpenAI response: ' . json_last_error_msg() );
             return array( 'error' => 'Failed to decode OpenAI response.' );
         }
 
