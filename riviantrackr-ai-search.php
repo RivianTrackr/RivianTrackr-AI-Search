@@ -29,8 +29,8 @@ class RivianTrackr_AI_Search {
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
-        add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
+        add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
 
         // Adds "Settings" link on Plugins page
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
@@ -991,46 +991,47 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    public function enqueue_frontend_assets() {
-        if ( is_admin() || ! is_search() ) {
-            return;
-        }
-
-        $options = $this->get_options();
-        if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
-            return;
-        }
-
-        $version = '3.1.9'; // for now, later we will make this a single constant used everywhere
-
-        wp_enqueue_style(
-            'rt-ai-search',
-            plugin_dir_url( __FILE__ ) . 'rt-ai-search.css',
-            array(),
-            $version
-        );
-
-        wp_enqueue_script(
-            'rt-ai-search',
-            plugin_dir_url( __FILE__ ) . 'rt-ai-search.js',
-            array(),
-            $version,
-            true
-        );
-
-        wp_localize_script(
-            'rt-ai-search',
-            'RTAISearch',
-            array(
-                'endpoint' => rest_url( 'rt-ai-search/v1/summary' ),
-                'query'    => get_search_query(),
-            )
-        );
-    }
-
     /* ---------------------------------------------------------
      *  Frontend placeholder
      * --------------------------------------------------------- */
+
+public function enqueue_frontend_assets() {
+    if ( is_admin() || ! is_search() ) {
+        return;
+    }
+
+    $options = $this->get_options();
+    if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
+        return;
+    }
+
+    $version = '3.1.9';
+
+    wp_enqueue_style(
+        'rt-ai-search',
+        plugin_dir_url( __FILE__ ) . 'rt-ai-search.css',
+        array(),
+        $version
+    );
+
+    wp_enqueue_script(
+        'rt-ai-search',
+        plugin_dir_url( __FILE__ ) . 'rt-ai-search.js',
+        array(),
+        $version,
+        true
+    );
+
+    wp_localize_script(
+        'rt-ai-search',
+        'RTAISearch',
+        array(
+            'endpoint' => rest_url( 'rt-ai-search/v1/summary' ),
+            'query'    => get_search_query(),
+        )
+    );
+}
+
 
     public function inject_ai_summary_placeholder( $query ) {
         if ( ! $query->is_main_query() || ! $query->is_search() || is_admin() ) {
