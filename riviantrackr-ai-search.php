@@ -3,7 +3,7 @@
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.1.8
+ * Version: 3.1.9
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ class RivianTrackr_AI_Search {
     private $option_name         = 'rt_ai_search_options';
     private $models_cache_option = 'rt_ai_search_models_cache';
     private $cache_keys_option   = 'rt_ai_search_cache_keys';
-    private $cache_prefix        = 'rt_ai_search_v3_1_8_';
+    private $cache_prefix        = 'rt_ai_search_v3_1_9_';
     private $cache_ttl           = 3600;
 
     private $logs_table_checked = false;
@@ -30,6 +30,7 @@ class RivianTrackr_AI_Search {
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
 
         // Adds "Settings" link on Plugins page
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
@@ -990,6 +991,43 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
+    public function enqueue_frontend_assets() {
+        if ( is_admin() || ! is_search() ) {
+            return;
+        }
+
+        $options = $this->get_options();
+        if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
+            return;
+        }
+
+        $version = '3.1.9'; // for now, later we will make this a single constant used everywhere
+
+        wp_enqueue_style(
+            'rt-ai-search',
+            plugin_dir_url( __FILE__ ) . 'rt-ai-search.css',
+            array(),
+            $version
+        );
+
+        wp_enqueue_script(
+            'rt-ai-search',
+            plugin_dir_url( __FILE__ ) . 'rt-ai-search.js',
+            array(),
+            $version,
+            true
+        );
+
+        wp_localize_script(
+            'rt-ai-search',
+            'RTAISearch',
+            array(
+                'endpoint' => rest_url( 'rt-ai-search/v1/summary' ),
+                'query'    => get_search_query(),
+            )
+        );
+    }
+
     /* ---------------------------------------------------------
      *  Frontend placeholder
      * --------------------------------------------------------- */
@@ -1011,7 +1049,6 @@ class RivianTrackr_AI_Search {
         $done = true;
 
         $search_query = get_search_query();
-        $rest_url     = esc_url_raw( rest_url( 'rt-ai-search/v1/summary' ) );
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
@@ -1035,130 +1072,6 @@ class RivianTrackr_AI_Search {
                 </div>
             </div>
         </div>
-
-        <style>
-            @keyframes rt-ai-spin { to { transform: rotate(360deg); } }
-
-            .rt-ai-search-summary-content { display:flex; align-items:center; gap:0.5rem; margin-top:0.75rem; }
-            .rt-ai-spinner {
-                width:14px; height:14px; border-radius:50%;
-                border:2px solid rgba(148,163,184,0.5);
-                border-top-color:#22c55e;
-                display:inline-block;
-                animation:rt-ai-spin 0.7s linear infinite;
-                flex-shrink:0;
-            }
-            .rt-ai-loading-text { margin:0; opacity:0.8; }
-
-            .rt-ai-search-summary-content.rt-ai-loaded { display:block; }
-            .rt-ai-search-summary-content.rt-ai-loaded > * { display:block; width:100%; max-width:100%; margin-bottom:0.75rem; }
-            .rt-ai-search-summary-content.rt-ai-loaded > *:last-child { margin-bottom:0; }
-
-            .rt-ai-openai-badge {
-                display:inline-flex; align-items:center; gap:0.35rem;
-                padding:0.15rem 0.55rem;
-                border-radius:999px;
-                border:1px solid rgba(148,163,184,0.5);
-                background:rgba(15,23,42,0.9);
-                font-size:0.7rem;
-                text-transform:uppercase;
-                letter-spacing:0.08em;
-                white-space:nowrap;
-                opacity:0.95;
-            }
-            .rt-ai-openai-mark {
-                width:10px; height:10px; border-radius:999px;
-                border:1px solid rgba(148,163,184,0.8);
-                position:relative;
-                flex-shrink:0;
-            }
-            .rt-ai-openai-mark::after {
-                content:'';
-                position:absolute;
-                inset:2px;
-                border-radius:999px;
-                background:linear-gradient(135deg,#22c55e,#3b82f6);
-            }
-            .rt-ai-openai-text { opacity:0.9; }
-
-            .rt-ai-sources { margin-top:1rem; font-size:0.85rem; }
-            .rt-ai-sources-toggle {
-                border:none; background:none; padding:0; margin:0 0 0.4rem 0;
-                font-size:0.85rem; cursor:pointer;
-                text-decoration:underline; text-underline-offset:2px;
-                opacity:0.95; color:#e5e7eb;
-            }
-            .rt-ai-sources-toggle:hover { opacity:1; }
-
-            .rt-ai-sources-list { margin:0; padding-left:1.1rem; font-size:0.85rem; }
-            .rt-ai-sources-list li { margin-bottom:0.4rem; }
-            .rt-ai-sources-list li:last-child { margin-bottom:0; }
-            .rt-ai-sources-list a { color:#22c55e; text-decoration:underline; text-underline-offset:2px; }
-            .rt-ai-sources-list a:hover { opacity:0.9; }
-            .rt-ai-sources-list span { display:block; opacity:0.8; color:#cbd5f5; }
-
-            @media (max-width: 640px) {
-                .rt-ai-summary-header { flex-direction:column; align-items:flex-start; }
-                .rt-ai-summary-header h2 { font-size:1rem; }
-                .rt-ai-openai-badge { margin-top:0.15rem; }
-                .rt-ai-search-summary-content { align-items:flex-start; }
-            }
-        </style>
-
-        <script>
-        (function() {
-            var container = document.getElementById('rt-ai-search-summary-content');
-            if (!container) return;
-
-            var q = <?php echo wp_json_encode( $search_query ); ?>;
-            if (!q) return;
-
-            var endpoint = '<?php echo $rest_url; ?>' + '?q=' + encodeURIComponent(q);
-
-            fetch(endpoint, { credentials: 'same-origin' })
-                .then(function(response) {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.json();
-                })
-                .then(function(data) {
-                    container.classList.add('rt-ai-loaded');
-                    if (data && data.answer_html) {
-                        container.innerHTML = data.answer_html;
-                    } else if (data && data.error) {
-                        container.innerHTML = '<p style="margin:0; opacity:0.8;">' + data.error + '</p>';
-                    } else {
-                        container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
-                    }
-                })
-                .catch(function() {
-                    container.classList.add('rt-ai-loaded');
-                    container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
-                });
-
-            document.addEventListener('click', function(e) {
-                var btn = e.target.closest('.rt-ai-sources-toggle');
-                if (!btn) return;
-
-                var wrapper = btn.closest('.rt-ai-sources');
-                if (!wrapper) return;
-
-                var list = wrapper.querySelector('.rt-ai-sources-list');
-                if (!list) return;
-
-                var isHidden = list.hasAttribute('hidden');
-                var showLabel = btn.getAttribute('data-label-show') || 'Show sources';
-                var hideLabel = btn.getAttribute('data-label-hide') || 'Hide sources';
-
-                if (isHidden) {
-                    list.removeAttribute('hidden');
-                    btn.textContent = hideLabel;
-                } else {
-                    list.setAttribute('hidden', 'hidden');
-                    btn.textContent = showLabel;
-                }
-            });
-        })();
-        </script>
         <?php
     }
 
