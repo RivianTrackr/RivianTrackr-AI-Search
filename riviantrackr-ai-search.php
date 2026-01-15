@@ -156,7 +156,7 @@ class RivianTrackr_AI_Search {
         $defaults = array(
             'api_key'              => '',
             'model'                => 'gpt-4.1-mini',
-            'max_posts'            => 6,
+            'max_posts'            => 10,
             'enable'               => 0,
             'max_calls_per_minute' => 30,
             'cache_ttl'            => 3600,
@@ -332,8 +332,11 @@ class RivianTrackr_AI_Search {
         ?>
         <input type="number" name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
                value="<?php echo esc_attr( $options['max_posts'] ); ?>"
-               min="1" max="30" />
-        <p class="description">How many posts or pages to pass as context for each search.</p>
+               min="1" max="20" />
+        <p class="description">
+            How many posts or pages to pass as context for each search. Default: 10. 
+            More posts provide better context but increase API costs slightly.
+        </p>
         <?php
     }
 
@@ -1370,10 +1373,6 @@ public function enqueue_frontend_assets() {
         return false;
     }
 
-    /* ---------------------------------------------------------
-     *  AI data + cache + JSON parsing
-     * --------------------------------------------------------- */
-
     private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '' ) {
         $options = $this->get_options();
         if ( empty( $options['api_key'] ) || empty( $options['enable'] ) ) {
@@ -1383,7 +1382,15 @@ public function enqueue_frontend_assets() {
 
         $normalized_query = strtolower( trim( $search_query ) );
         $namespace        = $this->get_cache_namespace();
-        $cache_key        = $this->cache_prefix . 'ns' . $namespace . '_' . md5( $options['model'] . '|' . $normalized_query );
+        
+        // Include max_posts in cache key to prevent stale results when settings change
+        $cache_key_data = implode( '|', array(
+            $options['model'],
+            $options['max_posts'],
+            $normalized_query
+        ) );
+        
+        $cache_key        = $this->cache_prefix . 'ns' . $namespace . '_' . md5( $cache_key_data );
         $cached_raw       = get_transient( $cache_key );
 
         if ( $cached_raw ) {
