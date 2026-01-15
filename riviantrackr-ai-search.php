@@ -9,7 +9,7 @@
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.2.3' );
+define( 'RT_AI_SEARCH_VERSION', '3.2.4' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 
 
