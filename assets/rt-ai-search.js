@@ -18,12 +18,20 @@
 
     var endpoint = window.RTAISearch.endpoint + '?q=' + encodeURIComponent(q);
 
+    // Set timeout for 30 seconds - if request takes longer, show timeout message
+    var timeoutId = setTimeout(function() {
+      container.classList.add('rt-ai-loaded');
+      container.innerHTML = '<p style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
+    }, 30000);
+
     fetch(endpoint, { credentials: 'same-origin' })
       .then(function(response) {
+        clearTimeout(timeoutId);
         if (!response.ok) throw new Error('Network response was not ok');
         return response.json();
       })
       .then(function(data) {
+        clearTimeout(timeoutId);
         container.classList.add('rt-ai-loaded');
 
         if (data && data.answer_html) {
@@ -38,7 +46,8 @@
 
         container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       })
-      .catch(function() {
+      .catch(function(error) {
+        clearTimeout(timeoutId);
         container.classList.add('rt-ai-loaded');
         container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       });
