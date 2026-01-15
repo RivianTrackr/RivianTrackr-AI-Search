@@ -3,13 +3,13 @@
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.2.3
+ * Version: 3.2.4
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.2.3' );
+define( 'RT_AI_SEARCH_VERSION', '3.2.4' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 
 
@@ -98,6 +98,47 @@ class RivianTrackr_AI_Search {
 
         global $wpdb;
         $table_name = self::get_logs_table_name();
+
+        // Date range controls for analytics tables
+        $range = isset( $_GET['range'] ) ? sanitize_text_field( wp_unslash( $_GET['range'] ) ) : '30d';
+        $start = isset( $_GET['start'] ) ? sanitize_text_field( wp_unslash( $_GET['start'] ) ) : '';
+        $end   = isset( $_GET['end'] ) ? sanitize_text_field( wp_unslash( $_GET['end'] ) ) : '';
+
+        $where_sql = '1=1';
+        if ( 'custom' === $range && ( ! empty( $start ) || ! empty( $end ) ) ) {
+            if ( ! empty( $start ) ) {
+                $where_sql .= $wpdb->prepare( ' AND created_at >= %s', $start . ' 00:00:00' );
+            }
+            if ( ! empty( $end ) ) {
+                $where_sql .= $wpdb->prepare( ' AND created_at <= %s', $end . ' 23:59:59' );
+            }
+        } elseif ( '7d' === $range ) {
+            $where_sql .= ' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+        } elseif ( '90d' === $range ) {
+            $where_sql .= ' AND created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)';
+        } elseif ( 'all' === $range ) {
+            // no-op
+        } else {
+            // Default 30d
+            $range      = '30d';
+            $where_sql .= ' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+        }
+
+        $export_url = wp_nonce_url(
+            add_query_arg(
+                array(
+                    'page'        => 'rt-ai-search-analytics',
+                    'rtai_export' => '1',
+                    'range'       => $range,
+                    'start'       => $start,
+                    'end'         => $end,
+                ),
+                admin_url( 'admin.php' )
+            ),
+            'rt_ai_search_export',
+            'rtai_nonce'
+        );
+
 
         $result = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
 
@@ -665,6 +706,18 @@ class RivianTrackr_AI_Search {
         return;
     }
 
+    // Export CSV action (date range aware)
+    if ( isset( $_GET['rtai_export'] ) && '1' === $_GET['rtai_export'] ) {
+        check_admin_referer( 'rt_ai_search_export', 'rtai_nonce' );
+
+        $range = isset( $_GET['range'] ) ? sanitize_text_field( wp_unslash( $_GET['range'] ) ) : '30d';
+        $start = isset( $_GET['start'] ) ? sanitize_text_field( wp_unslash( $_GET['start'] ) ) : '';
+        $end   = isset( $_GET['end'] ) ? sanitize_text_field( wp_unslash( $_GET['end'] ) ) : '';
+
+        $this->export_analytics_csv( $range, $start, $end );
+        exit;
+    }
+
     $logs_built      = false;
     $logs_error      = '';
     ?>
@@ -692,7 +745,90 @@ class RivianTrackr_AI_Search {
     <?php
 }
 
-    private function render_analytics_section() {
+    private 
+    private function export_analytics_csv( $range, $start, $end ) {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Unauthorized', 403 );
+        }
+
+        if ( ! $this->logs_table_is_available() ) {
+            wp_die( 'No analytics table found.', 400 );
+        }
+
+        global $wpdb;
+        $table_name = self::get_logs_table_name();
+
+        $where_sql  = '1=1';
+        $where_args = array();
+
+        // Supported ranges: 7d, 30d, 90d, all, custom (start/end as YYYY-MM-DD).
+        $range = strtolower( trim( (string) $range ) );
+
+        if ( 'custom' === $range && ( ! empty( $start ) || ! empty( $end ) ) ) {
+            // Treat provided dates as local site dates.
+            if ( ! empty( $start ) ) {
+                $where_sql   .= ' AND created_at >= %s';
+                $where_args[] = $start . ' 00:00:00';
+            }
+            if ( ! empty( $end ) ) {
+                $where_sql   .= ' AND created_at <= %s';
+                $where_args[] = $end . ' 23:59:59';
+            }
+        } elseif ( in_array( $range, array( '7d', '30d', '90d' ), true ) ) {
+            $days = (int) rtrim( $range, 'd' );
+            $where_sql   .= " AND created_at >= DATE_SUB(NOW(), INTERVAL {$days} DAY)";
+        } elseif ( 'all' === $range ) {
+            // no-op
+        } else {
+            // Default
+            $where_sql   .= ' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+            $range        = '30d';
+        }
+
+        $sql = "SELECT id, search_query, results_count, ai_success, ai_error, created_at
+                FROM {$table_name}
+                WHERE {$where_sql}
+                ORDER BY created_at DESC";
+
+        if ( ! empty( $where_args ) ) {
+            $sql = $wpdb->prepare( $sql, $where_args );
+        }
+
+        $rows = $wpdb->get_results( $sql, ARRAY_A );
+
+        $filename = 'rt-ai-search-analytics-' . gmdate( 'Y-m-d' ) . '.csv';
+
+        nocache_headers();
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename=' . $filename );
+        header( 'Pragma: no-cache' );
+        header( 'Expires: 0' );
+
+        $out = fopen( 'php://output', 'w' );
+        if ( false === $out ) {
+            wp_die( 'Unable to open output stream.', 500 );
+        }
+
+        fputcsv( $out, array( 'id', 'search_query', 'results_count', 'ai_success', 'ai_error', 'created_at' ) );
+
+        foreach ( $rows as $r ) {
+            fputcsv(
+                $out,
+                array(
+                    $r['id'],
+                    $r['search_query'],
+                    $r['results_count'],
+                    $r['ai_success'],
+                    $r['ai_error'],
+                    $r['created_at'],
+                )
+            );
+        }
+
+        fclose( $out );
+    }
+
+function render_analytics_section() {
         if ( ! $this->logs_table_is_available() ) {
             ?>
             <p>No analytics data yet. After visitors use search, you will see top queries and recent events here.</p>
@@ -747,6 +883,48 @@ class RivianTrackr_AI_Search {
              LIMIT 20"
         );
 
+
+        // Trending queries: compare last 7 days vs previous 7 days (delta)
+        $current_period = $wpdb->get_results(
+            "SELECT search_query, COUNT(*) AS total
+             FROM $table_name
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+             GROUP BY search_query",
+            OBJECT_K
+        );
+
+        $previous_period = $wpdb->get_results(
+            "SELECT search_query, COUNT(*) AS total
+             FROM $table_name
+             WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+               AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+             GROUP BY search_query",
+            OBJECT_K
+        );
+
+        $trending = array();
+        foreach ( $current_period as $q => $row ) {
+            $cur  = (int) $row->total;
+            $prev = isset( $previous_period[ $q ] ) ? (int) $previous_period[ $q ]->total : 0;
+            $trending[] = array(
+                'query' => $q,
+                'cur'   => $cur,
+                'prev'  => $prev,
+                'delta' => $cur - $prev,
+            );
+        }
+
+        usort(
+            $trending,
+            function( $a, $b ) {
+                return $b['delta'] <=> $a['delta'];
+            }
+        );
+
+        $trending = array_slice( $trending, 0, 15 );
+
+
+
         $top_errors = $wpdb->get_results(
             "SELECT ai_error, COUNT(*) AS total
              FROM $table_name
@@ -764,7 +942,30 @@ class RivianTrackr_AI_Search {
         );
         ?>
 
-        <h2>Overview</h2>
+        
+        <form method="get" action="" style="margin: 1rem 0 1.25rem 0;">
+            <input type="hidden" name="page" value="rt-ai-search-analytics" />
+            <label for="rtai_range" style="margin-right:0.5rem;">Range</label>
+            <select name="range" id="rtai_range">
+                <option value="7d" <?php selected( $range, '7d' ); ?>>Last 7 days</option>
+                <option value="30d" <?php selected( $range, '30d' ); ?>>Last 30 days</option>
+                <option value="90d" <?php selected( $range, '90d' ); ?>>Last 90 days</option>
+                <option value="all" <?php selected( $range, 'all' ); ?>>All time</option>
+                <option value="custom" <?php selected( $range, 'custom' ); ?>>Custom</option>
+            </select>
+
+            <span style="margin-left:0.75rem;">Start</span>
+            <input type="date" name="start" value="<?php echo esc_attr( $start ); ?>" />
+
+            <span style="margin-left:0.75rem;">End</span>
+            <input type="date" name="end" value="<?php echo esc_attr( $end ); ?>" />
+
+            <button class="button" style="margin-left:0.75rem;">Apply</button>
+
+            <a class="button button-secondary" href="<?php echo esc_url( $export_url ); ?>" style="margin-left:0.5rem;">Export CSV</a>
+        </form>
+
+<h2>Overview</h2>
         <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
             <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
                 <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Total AI searches</h3>
@@ -1000,6 +1201,34 @@ class RivianTrackr_AI_Search {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            <h4 style="margin:1rem 0 0.4rem 0; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; opacity:0.7;">Trending (last 7 days vs prior 7)</h4>
+
+            <?php if ( ! empty( $trending ) ) : ?>
+                <table class="widefat striped" style="margin-top:0; font-size:12px;">
+                    <thead>
+                        <tr>
+                            <th>Query</th>
+                            <th>Last 7d</th>
+                            <th>Prev 7d</th>
+                            <th>Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $trending as $t ) : ?>
+                            <tr>
+                                <td><?php echo esc_html( $t['query'] ); ?></td>
+                                <td><?php echo esc_html( (int) $t['cur'] ); ?></td>
+                                <td><?php echo esc_html( (int) $t['prev'] ); ?></td>
+                                <td><?php echo esc_html( (int) $t['delta'] ); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else : ?>
+                <p style="margin-top:0;">Not enough data yet.</p>
+            <?php endif; ?>
+
+
             <?php else : ?>
                 <p style="margin-top:0.3rem;">No searches logged yet.</p>
             <?php endif; ?>
