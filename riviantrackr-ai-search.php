@@ -10,6 +10,8 @@
  */
 
 define( 'RT_AI_SEARCH_VERSION', '3.2.0' );
+define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
+
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
@@ -455,26 +457,39 @@ class RivianTrackr_AI_Search {
             return $default_models;
         }
 
-        $cache = get_option( $this->models_cache_option );
-        if ( is_array( $cache ) && ! empty( $cache['models'] ) ) {
-            return $cache['models'];
+        $cache         = get_option( $this->models_cache_option );
+        $cached_models = ( is_array( $cache ) && ! empty( $cache['models'] ) ) ? $cache['models'] : array();
+        $updated_at    = ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) ? absint( $cache['updated_at'] ) : 0;
+
+        // Use cached models if they exist and are still within TTL.
+        if ( ! empty( $cached_models ) && $updated_at > 0 ) {
+            $age = time() - $updated_at;
+            if ( $age >= 0 && $age < RT_AI_SEARCH_MODELS_CACHE_TTL ) {
+                return $cached_models;
+            }
         }
 
+        // Cache is missing or stale, try to refresh from OpenAI.
         $models = $this->fetch_models_from_openai( $api_key );
 
-        if ( empty( $models ) ) {
-            return $default_models;
+        if ( ! empty( $models ) ) {
+            update_option(
+                $this->models_cache_option,
+                array(
+                    'models'     => $models,
+                    'updated_at' => time(),
+                )
+            );
+
+            return $models;
         }
 
-        update_option(
-            $this->models_cache_option,
-            array(
-                'models'     => $models,
-                'updated_at' => time(),
-            )
-        );
+        // If refresh failed, fall back to cached models if available, otherwise defaults.
+        if ( ! empty( $cached_models ) ) {
+            return $cached_models;
+        }
 
-        return $models;
+        return $default_models;
     }
 
     private function refresh_model_cache( $api_key ) {
