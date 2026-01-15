@@ -124,7 +124,7 @@ class RivianTrackr_AI_Search {
 
         $now = current_time( 'mysql' );
 
-        $wpdb->insert(
+        $result = $wpdb->insert(
             $table_name,
             array(
                 'search_query'  => $search_query,
@@ -142,6 +142,14 @@ class RivianTrackr_AI_Search {
             )
         );
 
+        // Log database errors for debugging
+        if ( false === $result ) {
+            error_log( 
+                '[RivianTrackr AI Search] Failed to log search event: ' . 
+                $wpdb->last_error . 
+                ' | Query: ' . substr( $search_query, 0, 50 )
+            );
+        }
     }
 
     /* ---------------------------------------------------------
