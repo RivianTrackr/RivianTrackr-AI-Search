@@ -1341,17 +1341,17 @@ public function enqueue_frontend_assets() {
         return false;
     }
 
+    // Updated get_ai_data_for_search() with better error messages
     private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '' ) {
         $options = $this->get_options();
         if ( empty( $options['api_key'] ) || empty( $options['enable'] ) ) {
-            $ai_error = 'AI search is not configured.';
+            $ai_error = 'AI search is not configured. Please contact the site administrator.';
             return null;
         }
 
         $normalized_query = strtolower( trim( $search_query ) );
         $namespace        = $this->get_cache_namespace();
         
-        // Include max_posts in cache key to prevent stale results when settings change
         $cache_key_data = implode( '|', array(
             $options['model'],
             $options['max_posts'],
@@ -1369,7 +1369,7 @@ public function enqueue_frontend_assets() {
         }
 
         if ( $this->is_rate_limited_for_ai_calls() ) {
-            $ai_error = 'AI summary is temporarily unavailable due to rate limits. Please try again in a moment.';
+            $ai_error = 'Too many AI requests right now. Please try again in a minute.';
             return null;
         }
 
@@ -1381,12 +1381,12 @@ public function enqueue_frontend_assets() {
         );
 
         if ( isset( $api_response['error'] ) ) {
-            $ai_error = $api_response['error'];
+            $ai_error = 'OpenAI API error: ' . $api_response['error'];
             return null;
         }
 
         if ( empty( $api_response['choices'][0]['message']['content'] ) ) {
-            $ai_error = 'Empty response from OpenAI.';
+            $ai_error = 'OpenAI returned an empty response. Please try again.';
             return null;
         }
 
@@ -1408,7 +1408,7 @@ public function enqueue_frontend_assets() {
         }
 
         if ( ! is_array( $decoded ) ) {
-            $ai_error = 'Failed to parse OpenAI JSON response.';
+            $ai_error = 'Could not parse AI response. The service may be experiencing issues.';
             return null;
         }
 
@@ -1438,9 +1438,10 @@ public function enqueue_frontend_assets() {
         return $decoded;
     }
 
+    // Updated call_openai_for_search() with better error messages
     private function call_openai_for_search( $api_key, $model, $user_query, $posts ) {
         if ( empty( $api_key ) ) {
-            return array( 'error' => 'OpenAI API key is not configured.' );
+            return array( 'error' => 'API key is missing. Please configure the plugin settings.' );
         }
 
         $endpoint = 'https://api.openai.com/v1/chat/completions';
@@ -1460,26 +1461,26 @@ public function enqueue_frontend_assets() {
         }
 
         $system_message = "You are the AI search engine for RivianTrackr.com, a Rivian focused news and guide site.
-Use the provided posts as your entire knowledge base.
-Answer the user query based only on these posts.
-Prefer newer posts over older ones when there is conflicting or overlapping information, especially for news, software updates, or product changes.
-If something is not covered, say that the site does not have that information yet instead of making something up.
+    Use the provided posts as your entire knowledge base.
+    Answer the user query based only on these posts.
+    Prefer newer posts over older ones when there is conflicting or overlapping information, especially for news, software updates, or product changes.
+    If something is not covered, say that the site does not have that information yet instead of making something up.
 
-Always respond as a single JSON object using this structure:
-{
-  \"answer_html\": \"HTML formatted summary answer for the user\",
-  \"results\": [
-     {
-       \"id\": 123,
-       \"title\": \"Post title\",
-       \"url\": \"https://...\",
-       \"excerpt\": \"Short snippet\",
-       \"type\": \"post or page\"
-     }
-  ]
-}
+    Always respond as a single JSON object using this structure:
+    {
+      \"answer_html\": \"HTML formatted summary answer for the user\",
+      \"results\": [
+         {
+           \"id\": 123,
+           \"title\": \"Post title\",
+           \"url\": \"https://...\",
+           \"excerpt\": \"Short snippet\",
+           \"type\": \"post or page\"
+         }
+      ]
+    }
 
-The results array should list up to 5 of the most relevant posts you used when creating the summary, so they can be shown as sources under the answer.";
+    The results array should list up to 5 of the most relevant posts you used when creating the summary, so they can be shown as sources under the answer.";
 
         $user_message  = "User search query: {$user_query}\n\n";
         $user_message .= "Here are the posts from the site (with newer posts listed first where possible):\n\n{$posts_text}";
@@ -1513,19 +1514,29 @@ The results array should list up to 5 of the most relevant posts you used when c
         }
 
         $args = array(
-                'headers' => array(
-                    'Authorization' => 'Bearer ' . $api_key,
-                    'Content-Type'  => 'application/json',
-                ),
-                'body'    => wp_json_encode( $body ),
-                'timeout' => RT_AI_SEARCH_API_TIMEOUT,
-            );
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ),
+            'body'    => wp_json_encode( $body ),
+            'timeout' => RT_AI_SEARCH_API_TIMEOUT,
+        );
 
         $response = wp_remote_post( $endpoint, $args );
 
         if ( is_wp_error( $response ) ) {
-            error_log( '[RivianTrackr AI Search] API request error: ' . $response->get_error_message() );
-            return array( 'error' => $response->get_error_message() );
+            $error_msg = $response->get_error_message();
+            error_log( '[RivianTrackr AI Search] API request error: ' . $error_msg );
+            
+            // Provide user-friendly error messages based on common errors
+            if ( strpos( $error_msg, 'cURL error 28' ) !== false || strpos( $error_msg, 'timed out' ) !== false ) {
+                return array( 'error' => 'Request timed out. The AI service may be slow right now. Please try again.' );
+            }
+            if ( strpos( $error_msg, 'cURL error 6' ) !== false || strpos( $error_msg, 'resolve host' ) !== false ) {
+                return array( 'error' => 'Could not connect to AI service. Please check your internet connection.' );
+            }
+            
+            return array( 'error' => 'Connection error: ' . $error_msg );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
@@ -1534,17 +1545,32 @@ The results array should list up to 5 of the most relevant posts you used when c
         if ( $code < 200 || $code >= 300 ) {
             error_log( '[RivianTrackr AI Search] API HTTP error ' . $code . ' body: ' . $body );
             $decoded_error = json_decode( $body, true );
+            
             if ( isset( $decoded_error['error']['message'] ) ) {
-                return array( 'error' => $decoded_error['error']['message'] );
+                $api_error = $decoded_error['error']['message'];
+                
+                // Provide context for common API errors
+                if ( $code === 401 ) {
+                    return array( 'error' => 'Invalid API key. Please check your plugin settings.' );
+                }
+                if ( $code === 429 ) {
+                    return array( 'error' => 'OpenAI rate limit exceeded. Please try again in a few moments.' );
+                }
+                if ( $code === 500 || $code === 503 ) {
+                    return array( 'error' => 'OpenAI service temporarily unavailable. Please try again later.' );
+                }
+                
+                return array( 'error' => $api_error );
             }
-            return array( 'error' => 'HTTP ' . $code . ' from OpenAI.' );
+            
+            return array( 'error' => 'API error (HTTP ' . $code . '). Please try again later.' );
         }
 
         $decoded = json_decode( $body, true );
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             error_log( '[RivianTrackr AI Search] Failed to decode OpenAI response: ' . json_last_error_msg() );
-            return array( 'error' => 'Failed to decode OpenAI response.' );
+            return array( 'error' => 'Could not understand AI response. Please try again.' );
         }
 
         return $decoded;
