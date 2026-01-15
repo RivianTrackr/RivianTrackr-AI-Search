@@ -3,13 +3,13 @@
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.2.4
+ * Version: 3.2.5
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.2.4' );
+define( 'RT_AI_SEARCH_VERSION', '3.2.5' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 
 
@@ -745,7 +745,6 @@ class RivianTrackr_AI_Search {
     <?php
 }
 
-    private 
     private function export_analytics_csv( $range, $start, $end ) {
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_die( 'Unauthorized', 403 );
