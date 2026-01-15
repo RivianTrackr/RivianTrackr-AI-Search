@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
@@ -28,6 +29,7 @@ class RivianTrackr_AI_Search {
 
     private $logs_table_checked = false;
     private $logs_table_exists  = false;
+    private $options_cache      = null;
 
     public function __construct() {
         
@@ -147,6 +149,10 @@ class RivianTrackr_AI_Search {
      * --------------------------------------------------------- */
 
     public function get_options() {
+        if ( is_array( $this->options_cache ) ) {
+            return $this->options_cache;
+        }
+
         $defaults = array(
             'api_key'              => '',
             'model'                => 'gpt-4.1-mini',
@@ -154,10 +160,12 @@ class RivianTrackr_AI_Search {
             'enable'               => 0,
             'max_calls_per_minute' => 30,
             'cache_ttl'            => 3600,
-);
+        );
 
         $opts = get_option( $this->option_name, array() );
-        return wp_parse_args( $opts, $defaults );
+        $this->options_cache = wp_parse_args( is_array( $opts ) ? $opts : array(), $defaults );
+
+        return $this->options_cache;
     }
 
     public function sanitize_options( $input ) {
@@ -183,6 +191,8 @@ class RivianTrackr_AI_Search {
         } else {
             $output['cache_ttl'] = 3600;
         }
+
+        $this->options_cache = null;
 
         return $output;
     }
@@ -1096,6 +1106,18 @@ public function enqueue_frontend_assets() {
      *  REST route and AI logic
      * --------------------------------------------------------- */
 
+    
+    /**
+     * Safe substring helper that works even if mbstring is not available.
+     */
+    private function safe_substr( $text, $start, $length ) {
+        if ( function_exists( 'mb_substr' ) ) {
+            return mb_substr( $text, $start, $length );
+        }
+
+        return substr( $text, $start, $length );
+    }
+
     public function register_rest_routes() {
         register_rest_route(
             'rt-ai-search/v1',
@@ -1173,13 +1195,13 @@ public function enqueue_frontend_assets() {
                 $used_ids[] = $post->ID;
 
                 $content = wp_strip_all_tags( $post->post_content );
-                $content = mb_substr( $content, 0, 400 );
+                $content = $this->safe_substr( $content, 0, 400 );
 
                 $posts_for_ai[] = array(
                     'id'      => $post->ID,
                     'title'   => get_the_title( $post ),
                     'url'     => get_permalink( $post ),
-                    'excerpt' => mb_substr( $content, 0, 200 ),
+                    'excerpt' => $this->safe_substr( $content, 0, 200 ),
                     'content' => $content,
                     'type'    => $post->post_type,
                     'date'    => get_the_date( 'Y-m-d', $post ),
@@ -1209,13 +1231,13 @@ public function enqueue_frontend_assets() {
             if ( $older_query->have_posts() ) {
                 foreach ( $older_query->posts as $post ) {
                     $content = wp_strip_all_tags( $post->post_content );
-                    $content = mb_substr( $content, 0, 400 );
+                    $content = $this->safe_substr( $content, 0, 400 );
 
                     $posts_for_ai[] = array(
                         'id'      => $post->ID,
                         'title'   => get_the_title( $post ),
                         'url'     => get_permalink( $post ),
-                        'excerpt' => mb_substr( $content, 0, 200 ),
+                        'excerpt' => $this->safe_substr( $content, 0, 200 ),
                         'content' => $content,
                         'type'    => $post->post_type,
                         'date'    => get_the_date( 'Y-m-d', $post ),
@@ -1240,13 +1262,13 @@ public function enqueue_frontend_assets() {
             if ( $fallback_query->have_posts() ) {
                 foreach ( $fallback_query->posts as $post ) {
                     $content = wp_strip_all_tags( $post->post_content );
-                    $content = mb_substr( $content, 0, 400 );
+                    $content = $this->safe_substr( $content, 0, 400 );
 
                     $posts_for_ai[] = array(
                         'id'      => $post->ID,
                         'title'   => get_the_title( $post ),
                         'url'     => get_permalink( $post ),
-                        'excerpt' => mb_substr( $content, 0, 200 ),
+                        'excerpt' => $this->safe_substr( $content, 0, 200 ),
                         'content' => $content,
                         'type'    => $post->post_type,
                         'date'    => get_the_date( 'Y-m-d', $post ),
