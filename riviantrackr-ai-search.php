@@ -745,6 +745,29 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
+    /* ---------------------------------------------------------
+     *  Analytics helper methods
+     * --------------------------------------------------------- */
+
+    /**
+     * Calculate success rate percentage from success count and total.
+     *
+     * @param int $success_count Number of successful operations.
+     * @param int $total Total number of operations.
+     * @return int Success rate as a percentage (0-100).
+     */
+    private function calculate_success_rate( $success_count, $total ) {
+        if ( $total <= 0 ) {
+            return 0;
+        }
+        
+        return (int) round( ( $success_count / $total ) * 100 );
+    }
+
+    /* ---------------------------------------------------------
+     *  Analytics page (updated to use helper)
+     * --------------------------------------------------------- */
+
     private function render_analytics_section() {
         if ( ! $this->logs_table_is_available() ) {
             ?>
@@ -767,7 +790,7 @@ class RivianTrackr_AI_Search {
         $total_searches = $totals ? (int) $totals->total : 0;
         $success_count  = $totals ? (int) $totals->success_count : 0;
         $error_count    = $totals ? (int) $totals->error_count : 0;
-        $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
+        $success_rate   = $this->calculate_success_rate( $success_count, $total_searches );
 
         $no_results_count = (int) $wpdb->get_var(
             "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
@@ -854,9 +877,9 @@ class RivianTrackr_AI_Search {
                 <tbody>
                     <?php foreach ( $daily_stats as $row ) : ?>
                         <?php
-                        $day_total   = (int) $row->total;
+                        $day_total = (int) $row->total;
                         $day_success = (int) $row->success_count;
-                        $day_rate    = $day_total > 0 ? round( ( $day_success / $day_total ) * 100 ) : 0;
+                        $day_rate = $this->calculate_success_rate( $day_success, $day_total );
                         ?>
                         <tr>
                             <td><?php echo esc_html( $row->day ); ?></td>
@@ -883,9 +906,9 @@ class RivianTrackr_AI_Search {
                 <tbody>
                     <?php foreach ( $top_queries as $row ) : ?>
                         <?php
-                        $total_q        = (int) $row->total;
-                        $success_q      = (int) $row->success_count;
-                        $success_q_rate = $total_q > 0 ? round( ( $success_q / $total_q ) * 100 ) : 0;
+                        $total_q = (int) $row->total;
+                        $success_q = (int) $row->success_count;
+                        $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
                         ?>
                         <tr>
                             <td><?php echo esc_html( $row->search_query ); ?></td>
@@ -939,7 +962,7 @@ class RivianTrackr_AI_Search {
                         <th>AI status</th>
                         <th>Error (short)</th>
                         <th>Date</th>
-                                            </tr>
+                    </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $recent_events as $event ) : ?>
@@ -999,7 +1022,7 @@ class RivianTrackr_AI_Search {
 
         $total_searches = $totals ? (int) $totals->total : 0;
         $success_count  = $totals ? (int) $totals->success_count : 0;
-        $success_rate   = $total_searches > 0 ? round( ( $success_count / $total_searches ) * 100 ) : 0;
+        $success_rate   = $this->calculate_success_rate( $success_count, $total_searches );
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
         $last_24   = (int) $wpdb->get_var(
@@ -1040,9 +1063,9 @@ class RivianTrackr_AI_Search {
                     <tbody>
                         <?php foreach ( $top_queries as $row ) : ?>
                             <?php
-                            $total_q        = (int) $row->total;
-                            $success_q      = (int) $row->success_count;
-                            $success_q_rate = $total_q > 0 ? round( ( $success_q / $total_q ) * 100 ) : 0;
+                            $total_q = (int) $row->total;
+                            $success_q = (int) $row->success_count;
+                            $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
                             ?>
                             <tr>
                                 <td><?php echo esc_html( $row->search_query ); ?></td>
