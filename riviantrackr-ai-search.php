@@ -1880,28 +1880,30 @@ class RivianTrackr_AI_Search {
     }
 
     public function enqueue_admin_assets( $hook ) {
-        error_log( '[RT AI Search] Hook: ' . $hook );
-        error_log( '[RT AI Search] Page: ' . ( isset( $_GET['page'] ) ? $_GET['page'] : 'none' ) );
+        // Load on all our plugin pages
+        // Hook can be: toplevel_page_rt-ai-search-settings or ai-search_page_rt-ai-search-analytics
+        $allowed_hooks = array(
+            'toplevel_page_rt-ai-search-settings',
+            'ai-search_page_rt-ai-search-analytics',
+            'riviantrackr-ai-search_page_rt-ai-search-analytics', // Alternative hook name
+        );
         
-        $screen = get_current_screen();
-        if ( $screen ) {
-            error_log( '[RT AI Search] Screen ID: ' . $screen->id );
-        }
+        // Also check if hook contains our plugin slug
+        $is_our_page = in_array( $hook, $allowed_hooks, true ) || 
+                       strpos( $hook, 'rt-ai-search' ) !== false;
         
-        // Try to enqueue
-        if ( isset( $_GET['page'] ) && strpos( $_GET['page'], 'rt-ai-search' ) !== false ) {
-            $css_file = plugin_dir_path( __FILE__ ) . 'assets/rt-ai-search-admin.css';
-            error_log( '[RT AI Search] CSS file exists: ' . ( file_exists( $css_file ) ? 'YES' : 'NO' ) );
-            
-            wp_enqueue_style(
-                'rt-ai-search-admin',
-                plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
-                array(),
-                RT_AI_SEARCH_VERSION
-            );
-            
-            error_log( '[RT AI Search] CSS enqueued' );
+        if ( ! $is_our_page ) {
+            return;
         }
+
+        $version = RT_AI_SEARCH_VERSION;
+
+        wp_enqueue_style(
+            'rt-ai-search-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
+            array(),
+            $version
+        );
     }
 
 
