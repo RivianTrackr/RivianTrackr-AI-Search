@@ -56,6 +56,7 @@ class RivianTrackr_AI_Search {
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+        add_action( 'wp_ajax_rt_ai_test_api_key', array( $this, 'ajax_test_api_key' ) );
 
         // Adds "Settings" link on Plugins page
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
@@ -366,11 +367,195 @@ class RivianTrackr_AI_Search {
     public function field_api_key() {
         $options = $this->get_options();
         ?>
-        <input type="password" name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
-               value="<?php echo esc_attr( $options['api_key'] ); ?>"
-               style="width: 400px;" autocomplete="off" />
-        <p class="description">Create an API key in the OpenAI dashboard and paste it here.</p>
+        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+            <input type="password" 
+                   id="rt-ai-api-key"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                   value="<?php echo esc_attr( $options['api_key'] ); ?>"
+                   style="width: 400px;" 
+                   autocomplete="off" />
+            
+            <button type="button" 
+                    id="rt-ai-test-key-btn" 
+                    class="button"
+                    style="white-space: nowrap;">
+                Test Connection
+            </button>
+        </div>
+        
+        <div id="rt-ai-test-result" style="margin-top: 0.5rem;"></div>
+        
+        <p class="description">
+            Create an API key in the OpenAI dashboard and paste it here. 
+            Use the "Test Connection" button to verify it works.
+        </p>
+        
+        <script>
+        (function($) {
+            $(document).ready(function() {
+                $('#rt-ai-test-key-btn').on('click', function() {
+                    var btn = $(this);
+                    var apiKey = $('#rt-ai-api-key').val().trim();
+                    var resultDiv = $('#rt-ai-test-result');
+                    
+                    if (!apiKey) {
+                        resultDiv.html('<div class="notice notice-error inline"><p>Please enter an API key first.</p></div>');
+                        return;
+                    }
+                    
+                    // Disable button and show loading
+                    btn.prop('disabled', true).text('Testing...');
+                    resultDiv.html('<div class="notice notice-info inline"><p>Testing API key...</p></div>');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_test_api_key',
+                            api_key: apiKey,
+                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
+                        },
+                        success: function(response) {
+                            btn.prop('disabled', false).text('Test Connection');
+                            
+                            if (response.success) {
+                                var msg = '<strong>' + response.data.message + '</strong>';
+                                if (response.data.model_count) {
+                                    msg += '<br>Available models: ' + response.data.model_count;
+                                    msg += ' (Chat models: ' + response.data.chat_models + ')';
+                                }
+                                resultDiv.html('<div class="notice notice-success inline"><p>' + msg + '</p></div>');
+                            } else {
+                                resultDiv.html('<div class="notice notice-error inline"><p><strong>Test failed:</strong> ' + response.data.message + '</p></div>');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Test Connection');
+                            resultDiv.html('<div class="notice notice-error inline"><p>Request failed. Please try again.</p></div>');
+                        }
+                    });
+                });
+            });
+        })(jQuery);
+        </script>
+        
+        <style>
+        .notice.inline {
+            display: inline-block;
+            margin: 0;
+            padding: 0.5rem 0.75rem;
+        }
+        .notice.inline p {
+            margin: 0;
+        }
+        </style>
         <?php
+    }
+
+    private function test_api_key( $api_key ) {
+        if ( empty( $api_key ) ) {
+            return array(
+                'success' => false,
+                'message' => 'API key is empty.',
+            );
+        }
+
+        // Make a simple API call to verify the key works
+        $response = wp_safe_remote_get(
+            'https://api.openai.com/v1/models',
+            array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $api_key,
+                ),
+                'timeout' => 10,
+            )
+        );
+
+        if ( is_wp_error( $response ) ) {
+            return array(
+                'success' => false,
+                'message' => 'Connection error: ' . $response->get_error_message(),
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+
+        if ( $code === 401 ) {
+            return array(
+                'success' => false,
+                'message' => 'Invalid API key. Please check your key and try again.',
+            );
+        }
+
+        if ( $code === 429 ) {
+            return array(
+                'success' => false,
+                'message' => 'Rate limit exceeded. Your API key works but has hit rate limits.',
+            );
+        }
+
+        if ( $code < 200 || $code >= 300 ) {
+            return array(
+                'success' => false,
+                'message' => 'API error (HTTP ' . $code . '). Please try again later.',
+            );
+        }
+
+        $data = json_decode( $body, true );
+        if ( json_last_error() !== JSON_ERROR_NONE ) {
+            return array(
+                'success' => false,
+                'message' => 'Could not parse API response.',
+            );
+        }
+
+        // Count available models
+        $model_count = isset( $data['data'] ) ? count( $data['data'] ) : 0;
+        
+        // Check for chat models specifically
+        $chat_models = array();
+        if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
+            foreach ( $data['data'] as $model ) {
+                if ( isset( $model['id'] ) ) {
+                    $id = $model['id'];
+                    if ( strpos( $id, 'gpt-4' ) === 0 || strpos( $id, 'gpt-3.5' ) === 0 ) {
+                        $chat_models[] = $id;
+                    }
+                }
+            }
+        }
+
+        return array(
+            'success'      => true,
+            'message'      => 'API key is valid and working!',
+            'model_count'  => $model_count,
+            'chat_models'  => count( $chat_models ),
+        );
+    }
+
+    public function ajax_test_api_key() {
+        // Check permissions
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+        }
+
+        // Verify nonce
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_test_key' ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid nonce.' ) );
+        }
+
+        // Get API key from POST
+        $api_key = isset( $_POST['api_key'] ) ? trim( $_POST['api_key'] ) : '';
+
+        // Test the key
+        $result = $this->test_api_key( $api_key );
+
+        if ( $result['success'] ) {
+            wp_send_json_success( $result );
+        } else {
+            wp_send_json_error( $result );
+        }
     }
 
     public function field_model() {
