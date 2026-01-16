@@ -1169,7 +1169,7 @@ public function enqueue_frontend_assets() {
         <?php
     }
 
-    
+
     /* ---------------------------------------------------------
      *  REST API security helpers
      * --------------------------------------------------------- */
@@ -1338,6 +1338,14 @@ public function enqueue_frontend_assets() {
      * @param int    $limit Maximum length in characters.
      * @return string Truncated text.
      */
+
+    private function safe_substr( $text, $start, $length ) {
+        if ( function_exists( 'mb_substr' ) ) {
+            return mb_substr( $text, $start, $length );
+        }
+        return substr( $text, $start, $length );
+    }
+    
     private function smart_truncate( $text, $limit ) {
         if ( empty( $text ) ) {
             return '';
