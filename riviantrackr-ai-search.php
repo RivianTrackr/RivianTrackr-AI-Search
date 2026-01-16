@@ -57,6 +57,7 @@ class RivianTrackr_AI_Search {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_action( 'wp_ajax_rt_ai_test_api_key', array( $this, 'ajax_test_api_key' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 
         // Adds "Settings" link on Plugins page
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
@@ -827,10 +828,6 @@ class RivianTrackr_AI_Search {
         return true;
     }
 
-    /* ---------------------------------------------------------
-     *  Settings page
-     * --------------------------------------------------------- */
-
     public function render_settings_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
@@ -882,58 +879,294 @@ class RivianTrackr_AI_Search {
             admin_url( 'admin.php?page=rt-ai-search-settings&rt_ai_clear_cache=1' ),
             'rt_ai_clear_cache'
         );
-        ?>
-        <div class="wrap">
-            <h1>AI Search Settings</h1>
 
+        // Check if setup is complete
+        $has_api_key = ! empty( $options['api_key'] );
+        $is_enabled  = ! empty( $options['enable'] );
+        $setup_complete = $has_api_key && $is_enabled;
+        ?>
+        
+        <div class="rt-ai-settings-wrap">
+            <!-- Header -->
+            <div class="rt-ai-header">
+                <h1>AI Search Settings</h1>
+                <p>Configure OpenAI-powered search summaries for your site.</p>
+            </div>
+
+            <!-- Status Card -->
+            <div class="rt-ai-status-card <?php echo $setup_complete ? 'active' : ''; ?>">
+                <div class="rt-ai-status-icon">
+                    <?php echo $setup_complete ? '✓' : '○'; ?>
+                </div>
+                <div class="rt-ai-status-content">
+                    <h3><?php echo $setup_complete ? 'AI Search Active' : 'Setup Required'; ?></h3>
+                    <p>
+                        <?php 
+                        if ( $setup_complete ) {
+                            echo 'Your AI search is configured and running.';
+                        } elseif ( ! $has_api_key ) {
+                            echo 'Add your OpenAI API key to get started.';
+                        } else {
+                            echo 'Enable AI search to start generating summaries.';
+                        }
+                        ?>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Notifications -->
             <?php if ( $refreshed ) : ?>
-                <div class="updated notice">
-                    <p>Model list refreshed from OpenAI.</p>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    Model list refreshed from OpenAI.
                 </div>
             <?php elseif ( ! empty( $error ) ) : ?>
-                <div class="error notice">
-                    <p><?php echo esc_html( $error ); ?></p>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <?php echo esc_html( $error ); ?>
                 </div>
             <?php endif; ?>
 
             <?php if ( $cache_cleared && empty( $cache_clear_error ) ) : ?>
-                <div class="updated notice">
-                    <p>AI summary cache cleared. New searches will fetch fresh answers.</p>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    AI summary cache cleared. New searches will fetch fresh answers.
                 </div>
             <?php elseif ( ! empty( $cache_clear_error ) ) : ?>
-                <div class="error notice">
-                    <p><?php echo esc_html( $cache_clear_error ); ?></p>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <?php echo esc_html( $cache_clear_error ); ?>
                 </div>
             <?php endif; ?>
 
             <form method="post" action="options.php">
-                <?php
-                settings_fields( 'rt_ai_search_group' );
-                do_settings_sections( 'rt-ai-search' );
-                submit_button();
-                ?>
+                <?php settings_fields( 'rt_ai_search_group' ); ?>
+
+                <!-- Section 1: Getting Started (Most Important) -->
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Getting Started</h2>
+                        <p>Essential settings to enable AI search</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <!-- Enable Toggle -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>AI Search</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Enable or disable AI-powered search summaries site-wide
+                            </div>
+                            <div class="rt-ai-toggle-wrapper">
+                                <label class="rt-ai-toggle">
+                                    <input type="checkbox" 
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
+                                           value="1" 
+                                           <?php checked( $options['enable'], 1 ); ?> />
+                                    <span class="rt-ai-toggle-slider"></span>
+                                </label>
+                                <span class="rt-ai-toggle-label">
+                                    <?php echo $options['enable'] ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- API Key -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label for="rt-ai-api-key">OpenAI API Key</label>
+                                <span class="rt-ai-field-required">Required</span>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="password" 
+                                       id="rt-ai-api-key"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                                       value="<?php echo esc_attr( $options['api_key'] ); ?>"
+                                       placeholder="sk-proj-..." 
+                                       autocomplete="off" />
+                            </div>
+                            <div class="rt-ai-field-actions">
+                                <button type="button" 
+                                        id="rt-ai-test-key-btn" 
+                                        class="rt-ai-button rt-ai-button-secondary">
+                                    Test Connection
+                                </button>
+                            </div>
+                            <div id="rt-ai-test-result" style="margin-top: 12px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: AI Configuration -->
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>AI Configuration</h2>
+                        <p>Customize how AI generates search summaries</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <!-- Model Selection -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>AI Model</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Recommended: <strong>gpt-4o-mini</strong> (fastest & most cost-effective)
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <?php
+                                $models = $this->get_available_models_for_dropdown( $options['api_key'] );
+                                if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
+                                    $models[] = $options['model'];
+                                }
+                                $models = array_unique( $models );
+                                sort( $models );
+                                ?>
+                                <select name="<?php echo esc_attr( $this->option_name ); ?>[model]">
+                                    <?php foreach ( $models as $model_id ) : ?>
+                                        <option value="<?php echo esc_attr( $model_id ); ?>" 
+                                                <?php selected( $options['model'], $model_id ); ?>>
+                                            <?php echo esc_html( $model_id ); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="rt-ai-field-actions">
+                                <a href="<?php echo esc_url( $refresh_url ); ?>" 
+                                   class="rt-ai-button rt-ai-button-secondary">
+                                    Refresh Models
+                                </a>
+                            </div>
+                            <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
+                                <div style="margin-top: 8px; font-size: 13px; color: #86868b;">
+                                    Last updated: <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), intval( $cache['updated_at'] ) ) ); ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Max Posts -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Context Size</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Number of posts to send as context (more posts = better answers, higher cost)
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="number" 
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
+                                       value="<?php echo esc_attr( $options['max_posts'] ); ?>"
+                                       min="1" 
+                                       max="20" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Performance -->
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Performance</h2>
+                        <p>Control rate limits and caching behavior</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <!-- Cache TTL -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Cache Duration</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                How long to cache AI summaries (60 seconds to 24 hours)
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="number"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[cache_ttl]"
+                                       value="<?php echo esc_attr( isset( $options['cache_ttl'] ) ? $options['cache_ttl'] : 3600 ); ?>"
+                                       min="60"
+                                       max="86400"
+                                       step="60" />
+                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
+                            </div>
+                            <div class="rt-ai-field-actions">
+                                <a href="<?php echo esc_url( $clear_cache_url ); ?>" 
+                                   class="rt-ai-button rt-ai-button-secondary">
+                                    Clear Cache Now
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Rate Limit -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Rate Limit</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Maximum AI calls per minute across the entire site (0 = unlimited)
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="number"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[max_calls_per_minute]"
+                                       value="<?php echo esc_attr( isset( $options['max_calls_per_minute'] ) ? $options['max_calls_per_minute'] : 30 ); ?>"
+                                       min="0"
+                                       step="1" />
+                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">calls/minute</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="rt-ai-footer-actions">
+                    <?php submit_button( 'Save Settings', 'primary rt-ai-button rt-ai-button-primary', 'submit', false ); ?>
+                </div>
             </form>
-
-            <p style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">
-                    Refresh model list from OpenAI
-                </a>
-                <a href="<?php echo esc_url( $clear_cache_url ); ?>" class="button">
-                    Clear AI cache
-                </a>
-            </p>
-
-            <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
-                <p class="description">
-                    Model list last updated:
-                    <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), intval( $cache['updated_at'] ) ) ); ?>
-                </p>
-            <?php endif; ?>
-
-            <p class="description">
-                For detailed AI search analytics, open AI Search in the sidebar and click Analytics.
-            </p>
         </div>
+
+        <!-- Test API Key JavaScript (keep existing) -->
+        <script>
+        (function($) {
+            $(document).ready(function() {
+                $('#rt-ai-test-key-btn').on('click', function() {
+                    var btn = $(this);
+                    var apiKey = $('#rt-ai-api-key').val().trim();
+                    var resultDiv = $('#rt-ai-test-result');
+                    
+                    if (!apiKey) {
+                        resultDiv.html('<div style="color: #c41e3a; font-size: 14px;">Please enter an API key first.</div>');
+                        return;
+                    }
+                    
+                    btn.prop('disabled', true).text('Testing...');
+                    resultDiv.html('<div style="color: #86868b; font-size: 14px;">Testing API key...</div>');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_test_api_key',
+                            api_key: apiKey,
+                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
+                        },
+                        success: function(response) {
+                            btn.prop('disabled', false).text('Test Connection');
+                            
+                            if (response.success) {
+                                var msg = '<strong style="color: #0a5e2a;">✓ ' + response.data.message + '</strong>';
+                                if (response.data.model_count) {
+                                    msg += '<br><span style="color: #86868b; font-size: 13px;">Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')</span>';
+                                }
+                                resultDiv.html('<div style="color: #0a5e2a; font-size: 14px;">' + msg + '</div>');
+                            } else {
+                                resultDiv.html('<div style="color: #c41e3a; font-size: 14px;"><strong>✗ Test failed:</strong> ' + response.data.message + '</div>');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Test Connection');
+                            resultDiv.html('<div style="color: #c41e3a; font-size: 14px;">Request failed. Please try again.</div>');
+                        }
+                    });
+                });
+            });
+        })(jQuery);
+        </script>
         <?php
     }
 
@@ -1328,46 +1561,57 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    /* ---------------------------------------------------------
-     *  Frontend placeholder
-     * --------------------------------------------------------- */
+    public function enqueue_frontend_assets() {
+        if ( is_admin() || ! is_search() ) {
+            return;
+        }
 
-public function enqueue_frontend_assets() {
-    if ( is_admin() || ! is_search() ) {
-        return;
+        $options = $this->get_options();
+        if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
+            return;
+        }
+
+        $version = RT_AI_SEARCH_VERSION;
+
+        wp_enqueue_style(
+            'rt-ai-search',
+            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.css',
+            array(),
+            $version
+        );
+
+        wp_enqueue_script(
+            'rt-ai-search',
+            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.js',
+            array(),
+            $version,
+            true
+        );
+
+        wp_localize_script(
+            'rt-ai-search',
+            'RTAISearch',
+            array(
+                'endpoint' => rest_url( 'rt-ai-search/v1/summary' ),
+                'query'    => get_search_query(),
+            )
+        );
     }
 
-    $options = $this->get_options();
-    if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
-        return;
+    public function enqueue_admin_assets( $hook ) {
+        if ( strpos( $hook, 'rt-ai-search' ) === false ) {
+            return;
+        }
+
+        $version = RT_AI_SEARCH_VERSION;
+
+        wp_enqueue_style(
+            'rt-ai-search-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
+            array(),
+            $version
+        );
     }
-
-    $version = RT_AI_SEARCH_VERSION;
-
-    wp_enqueue_style(
-        'rt-ai-search',
-        plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.css',
-        array(),
-        $version
-    );
-
-    wp_enqueue_script(
-        'rt-ai-search',
-        plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.js',
-        array(),
-        $version,
-        true
-    );
-
-    wp_localize_script(
-        'rt-ai-search',
-        'RTAISearch',
-        array(
-            'endpoint' => rest_url( 'rt-ai-search/v1/summary' ),
-            'query'    => get_search_query(),
-        )
-    );
-}
 
 
     public function inject_ai_summary_placeholder( $query ) {
