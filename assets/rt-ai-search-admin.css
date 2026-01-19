@@ -639,7 +639,10 @@
     margin-top: 12px;
 }
 
-/* Modal Styles */
+/* ==========================================
+ * Modal Styles - Add to rt-ai-search-admin.css
+ * ========================================== */
+
 .rt-ai-modal-overlay {
     display: none;
     position: fixed;
