@@ -636,94 +636,86 @@ class RivianTrackr_AI_Search {
     }
 
     public function field_custom_css() {
-        $options = $this->get_options();
-        $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
-        ?>
-        <div class="rt-ai-css-editor-wrapper">
-            <textarea 
-                name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
-                id="rt-ai-custom-css"
-                class="rt-ai-css-editor"
-                rows="15"
-                placeholder="/* Add your custom CSS here */
-    .rt-ai-search-summary {
-        /* Your custom styles */
-    }"><?php echo esc_textarea( $custom_css ); ?></textarea>
-        </div>
-        
-        <p class="description">
-            Add custom CSS to style the AI search summary. This will override the default styles.
-            <br>
-            <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
-        </p>
-        
-        <div class="rt-ai-css-buttons">
-            <button type="button" id="rt-ai-reset-css" class="button">
-                Reset to Defaults
-            </button>
-            <button type="button" id="rt-ai-view-default-css" class="button">
-                View Default CSS
-            </button>
-        </div>
-        
-        <!-- Modal HTML -->
-        <div id="rt-ai-default-css-modal" class="rt-ai-modal-overlay">
-            <div class="rt-ai-modal-content">
-                <button type="button" id="rt-ai-close-modal" class="rt-ai-modal-close" aria-label="Close">×</button>
-                <h2 class="rt-ai-modal-header">Default CSS Reference</h2>
-                <p class="rt-ai-modal-description">
-                    Copy and modify these default styles to customize your AI search summary.
-                </p>
-                <pre class="rt-ai-modal-code"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
-            </div>
-        </div>
-        
-        <!-- JavaScript -->
-        <script>
-        (function($) {
-            $(document).ready(function() {
-                var modal = $('#rt-ai-default-css-modal');
-                var textarea = $('#rt-ai-custom-css');
+    $options = $this->get_options();
+    $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
+    ?>
+    <div class="rt-ai-css-editor-wrapper">
+        <textarea 
+            name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
+            id="rt-ai-custom-css"
+            class="rt-ai-css-editor"
+            rows="15"
+            placeholder="/* Add your custom CSS here */
+.rt-ai-search-summary {
+    /* Your custom styles */
+}"><?php echo esc_textarea( $custom_css ); ?></textarea>
+    </div>
+    
+    <p class="description">
+        Add custom CSS to style the AI search summary. This will override the default styles.
+        <br>
+        <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
+    </p>
+    
+    <div class="rt-ai-css-buttons">
+        <button type="button" id="rt-ai-reset-css" class="button">
+            Reset to Defaults
+        </button>
+        <button type="button" id="rt-ai-view-default-css" class="button">
+            View Default CSS
+        </button>
+    </div>
+    
+    <script>
+    (function($) {
+        $(document).ready(function() {
+            var textarea = $('#rt-ai-custom-css');
+            
+            // Reset CSS
+            $('#rt-ai-reset-css').on('click', function() {
+                if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
+                    textarea.val('');
+                }
+            });
+            
+            // View default CSS - Create modal on demand
+            $('#rt-ai-view-default-css').on('click', function() {
+                // Remove existing modal if any
+                $('#rt-ai-default-css-modal').remove();
                 
-                // Reset CSS
-                $('#rt-ai-reset-css').on('click', function() {
-                    if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
-                        textarea.val('');
-                    }
-                });
+                // Create modal HTML
+                var modalHTML = '<div id="rt-ai-default-css-modal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 999999; align-items: center; justify-content: center;">' +
+                    '<div style="background: #fff; padding: 24px; border-radius: 12px; max-width: 800px; max-height: 80vh; overflow: auto; position: relative; box-shadow: 0 20px 25px rgba(0,0,0,0.1);">' +
+                        '<button type="button" id="rt-ai-close-modal" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: #6e6e73; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px;">×</button>' +
+                        '<h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #1d1d1f; padding-right: 40px;">Default CSS Reference</h2>' +
+                        '<p style="margin: 0 0 12px 0; color: #6e6e73; font-size: 14px;">Copy and modify these default styles to customize your AI search summary.</p>' +
+                        '<pre style="background: #f5f5f7; padding: 16px; border-radius: 8px; overflow-x: auto; font-family: monospace; font-size: 12px; line-height: 1.6; margin: 0;"><code><?php echo esc_js( esc_html( $this->get_default_css() ) ); ?></code></pre>' +
+                    '</div>' +
+                '</div>';
                 
-                // View default CSS
-                $('#rt-ai-view-default-css').on('click', function() {
-                    console.log('Opening modal...'); // Debug log
-                    modal.addClass('rt-ai-modal-open');
-                });
+                // Append to body
+                $('body').append(modalHTML);
                 
-                // Close modal - X button
-                $('#rt-ai-close-modal').on('click', function() {
-                    console.log('Closing modal via X...'); // Debug log
-                    modal.removeClass('rt-ai-modal-open');
-                });
-                
-                // Close on background click
-                modal.on('click', function(e) {
+                // Close handlers
+                $('#rt-ai-close-modal, #rt-ai-default-css-modal').on('click', function(e) {
                     if (e.target === this) {
-                        console.log('Closing modal via background...'); // Debug log
-                        modal.removeClass('rt-ai-modal-open');
+                        $('#rt-ai-default-css-modal').remove();
                     }
                 });
                 
-                // Close on ESC key
-                $(document).on('keydown', function(e) {
-                    if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
-                        console.log('Closing modal via ESC...'); // Debug log
-                        modal.removeClass('rt-ai-modal-open');
+                // ESC key
+                $(document).on('keydown.rtmodal', function(e) {
+                    if (e.key === 'Escape') {
+                        $('#rt-ai-default-css-modal').remove();
+                        $(document).off('keydown.rtmodal');
                     }
                 });
             });
-        })(jQuery);
-        </script>
-        <?php
-    } 
+        });
+    })(jQuery);
+    </script>
+    <?php
+}
 
     private function get_default_css() {
         return '@keyframes rt-ai-spin {
