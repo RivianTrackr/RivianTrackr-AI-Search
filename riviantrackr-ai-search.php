@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.3
+ * Version: 3.3.4
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.3' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.4' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -221,6 +221,16 @@ class RivianTrackr_AI_Search {
             'max_calls_per_minute' => 30,
             'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
             'custom_css'           => '',
+            'border_color'          => '#d2d2d7',
+            'background_color'      => '#ffffff',
+            'text_color'            => '#1d1d1f',
+            'accent_color'          => '#0071e3',
+            'border_radius'         => 10,
+            'border_style'          => 'solid',
+            'show_badge'            => 1,
+            'show_sources_expanded' => 0,
+            'show_disclaimer'       => 1,
+
         );
 
         $opts = get_option( $this->option_name, array() );
@@ -236,11 +246,9 @@ class RivianTrackr_AI_Search {
         $output['model']     = isset( $input['model'] ) ? sanitize_text_field( $input['model'] ) : 'gpt-4o-mini';  // Updated default
         $output['max_posts'] = isset( $input['max_posts'] ) ? max( 1, intval( $input['max_posts'] ) ) : 10;
         $output['enable']    = ! empty( $input['enable'] ) ? 1 : 0;
-
         $output['max_calls_per_minute'] = isset( $input['max_calls_per_minute'] )
             ? max( 0, intval( $input['max_calls_per_minute'] ) )
             : 30;
-
         if ( isset( $input['cache_ttl'] ) ) {
             $ttl = intval( $input['cache_ttl'] );
             if ( $ttl < RT_AI_SEARCH_MIN_CACHE_TTL ) {
@@ -252,8 +260,30 @@ class RivianTrackr_AI_Search {
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
-
         $output['custom_css'] = isset( $input['custom_css'] ) ? wp_strip_all_tags( $input['custom_css'] ) : '';
+        $output['border_color'] = isset( $input['border_color'] ) ? sanitize_hex_color( $input['border_color'] ) : '#d2d2d7';
+        if ( ! $output['border_color'] ) {
+            $output['border_color'] = '#d2d2d7';
+        }
+        $output['background_color'] = isset( $input['background_color'] ) ? sanitize_hex_color( $input['background_color'] ) : '#ffffff';
+        if ( ! $output['background_color'] ) {
+            $output['background_color'] = '#ffffff';
+        }
+        $output['text_color'] = isset( $input['text_color'] ) ? sanitize_hex_color( $input['text_color'] ) : '#1d1d1f';
+        if ( ! $output['text_color'] ) {
+            $output['text_color'] = '#1d1d1f';
+        }
+        $output['accent_color'] = isset( $input['accent_color'] ) ? sanitize_hex_color( $input['accent_color'] ) : '#0071e3';
+        if ( ! $output['accent_color'] ) {
+            $output['accent_color'] = '#0071e3';
+        }
+        $output['border_radius'] = isset( $input['border_radius'] ) ? max( 0, min( 20, intval( $input['border_radius'] ) ) ) : 10;
+        $valid_border_styles = array( 'solid', 'dashed', 'none' );
+        $output['border_style'] = isset( $input['border_style'] ) && in_array( $input['border_style'], $valid_border_styles, true ) ? $input['border_style'] : 'solid';
+        $output['show_badge'] = ! empty( $input['show_badge'] ) ? 1 : 0;
+        $output['show_sources_expanded'] = ! empty( $input['show_sources_expanded'] ) ? 1 : 0;
+        $output['show_disclaimer'] = ! empty( $input['show_disclaimer'] ) ? 1 : 0;
+
 
         $this->options_cache = null;
 
@@ -830,6 +860,156 @@ class RivianTrackr_AI_Search {
 }';
     }
 
+    public function field_border_color() {
+        $options = $this->get_options();
+        $value = isset( $options['border_color'] ) ? $options['border_color'] : '#d2d2d7';
+        ?>
+        <input type="text" 
+               name="<?php echo esc_attr( $this->option_name ); ?>[border_color]"
+               value="<?php echo esc_attr( $value ); ?>"
+               class="rt-ai-color-picker" />
+        <?php
+    }
+
+    public function field_background_color() {
+        $options = $this->get_options();
+        $value = isset( $options['background_color'] ) ? $options['background_color'] : '#ffffff';
+        ?>
+        <input type="text" 
+               name="<?php echo esc_attr( $this->option_name ); ?>[background_color]"
+               value="<?php echo esc_attr( $value ); ?>"
+               class="rt-ai-color-picker" />
+        <?php
+    }
+
+    public function field_text_color() {
+        $options = $this->get_options();
+        $value = isset( $options['text_color'] ) ? $options['text_color'] : '#1d1d1f';
+        ?>
+        <input type="text" 
+               name="<?php echo esc_attr( $this->option_name ); ?>[text_color]"
+               value="<?php echo esc_attr( $value ); ?>"
+               class="rt-ai-color-picker" />
+        <?php
+    }
+
+    public function field_accent_color() {
+        $options = $this->get_options();
+        $value = isset( $options['accent_color'] ) ? $options['accent_color'] : '#0071e3';
+        ?>
+        <input type="text" 
+               name="<?php echo esc_attr( $this->option_name ); ?>[accent_color]"
+               value="<?php echo esc_attr( $value ); ?>"
+               class="rt-ai-color-picker" />
+        <?php
+    }
+
+    public function field_border_radius() {
+        $options = $this->get_options();
+        $value = isset( $options['border_radius'] ) ? intval( $options['border_radius'] ) : 10;
+        ?>
+        <input type="range" 
+               name="<?php echo esc_attr( $this->option_name ); ?>[border_radius]"
+               id="rt-ai-border-radius"
+               value="<?php echo esc_attr( $value ); ?>"
+               min="0" 
+               max="20" 
+               step="1" />
+        <span id="rt-ai-border-radius-value" style="margin-left: 12px; font-weight: 600; color: #0071e3;"><?php echo esc_html( $value ); ?>px</span>
+        
+        <script>
+        (function($) {
+            $(document).ready(function() {
+                $('#rt-ai-border-radius').on('input', function() {
+                    $('#rt-ai-border-radius-value').text($(this).val() + 'px');
+                });
+            });
+        })(jQuery);
+        </script>
+        <?php
+    }
+
+    public function field_border_style() {
+        $options = $this->get_options();
+        $value = isset( $options['border_style'] ) ? $options['border_style'] : 'solid';
+        ?>
+        <div style="display: flex; gap: 16px;">
+            <label style="display: flex; align-items: center; gap: 6px;">
+                <input type="radio" 
+                       name="<?php echo esc_attr( $this->option_name ); ?>[border_style]"
+                       value="solid" 
+                       <?php checked( $value, 'solid' ); ?> />
+                <span>Solid</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px;">
+                <input type="radio" 
+                       name="<?php echo esc_attr( $this->option_name ); ?>[border_style]"
+                       value="dashed" 
+                       <?php checked( $value, 'dashed' ); ?> />
+                <span>Dashed</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px;">
+                <input type="radio" 
+                       name="<?php echo esc_attr( $this->option_name ); ?>[border_style]"
+                       value="none" 
+                       <?php checked( $value, 'none' ); ?> />
+                <span>None</span>
+            </label>
+        </div>
+        <?php
+    }
+
+    public function field_show_badge() {
+        $options = $this->get_options();
+        $checked = ! empty( $options['show_badge'] );
+        ?>
+        <label class="rt-ai-toggle">
+            <input type="checkbox" 
+                   name="<?php echo esc_attr( $this->option_name ); ?>[show_badge]"
+                   value="1" 
+                   <?php checked( $checked ); ?> />
+            <span class="rt-ai-toggle-slider"></span>
+        </label>
+        <span class="rt-ai-toggle-label" style="margin-left: 12px;">
+            Show "Powered by OpenAI" badge
+        </span>
+        <?php
+    }
+
+    public function field_show_sources_expanded() {
+        $options = $this->get_options();
+        $checked = ! empty( $options['show_sources_expanded'] );
+        ?>
+        <label class="rt-ai-toggle">
+            <input type="checkbox" 
+                   name="<?php echo esc_attr( $this->option_name ); ?>[show_sources_expanded]"
+                   value="1" 
+                   <?php checked( $checked ); ?> />
+            <span class="rt-ai-toggle-slider"></span>
+        </label>
+        <span class="rt-ai-toggle-label" style="margin-left: 12px;">
+            Show sources expanded by default
+        </span>
+        <?php
+    }
+
+    public function field_show_disclaimer() {
+        $options = $this->get_options();
+        $checked = ! empty( $options['show_disclaimer'] );
+        ?>
+        <label class="rt-ai-toggle">
+            <input type="checkbox" 
+                   name="<?php echo esc_attr( $this->option_name ); ?>[show_disclaimer]"
+                   value="1" 
+                   <?php checked( $checked ); ?> />
+            <span class="rt-ai-toggle-slider"></span>
+        </label>
+        <span class="rt-ai-toggle-label" style="margin-left: 12px;">
+            Show disclaimer text
+        </span>
+        <?php
+    }
+
     private function fetch_models_from_openai( $api_key ) {
         if ( empty( $api_key ) ) {
             return array();
@@ -971,10 +1151,6 @@ class RivianTrackr_AI_Search {
 
         return true;
     }
-
-    /* ---------------------------------------------------------
-     *  Cache helpers
-     * --------------------------------------------------------- */
 
     private function get_cache_namespace() {
         $ns = (int) get_option( $this->cache_namespace_option, 1 );
@@ -1299,13 +1475,90 @@ class RivianTrackr_AI_Search {
                         <p>Customize how the AI search summary looks on your site</p>
                     </div>
                     <div class="rt-ai-section-content">
-                        <!-- Custom CSS -->
+                        
+                        <!-- Colors -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Colors</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Customize the color scheme of your AI search summary
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 16px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #1d1d1f;">Border Color</label>
+                                    <?php $this->field_border_color(); ?>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #1d1d1f;">Background Color</label>
+                                    <?php $this->field_background_color(); ?>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #1d1d1f;">Text Color</label>
+                                    <?php $this->field_text_color(); ?>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: #1d1d1f;">Accent Color</label>
+                                    <?php $this->field_accent_color(); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Layout -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Border Style</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Choose how the border appears around the summary box
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <?php $this->field_border_style(); ?>
+                            </div>
+                        </div>
+
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Border Radius</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Adjust the roundness of corners (0 = square, 20 = very round)
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <?php $this->field_border_radius(); ?>
+                            </div>
+                        </div>
+
+                        <!-- Display Options -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Display Options</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Control which elements are shown in the AI summary
+                            </div>
+                            <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 16px;">
+                                <div style="display: flex; align-items: center;">
+                                    <?php $this->field_show_badge(); ?>
+                                </div>
+                                <div style="display: flex; align-items: center;">
+                                    <?php $this->field_show_sources_expanded(); ?>
+                                </div>
+                                <div style="display: flex; align-items: center;">
+                                    <?php $this->field_show_disclaimer(); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Custom CSS (Advanced) -->
                         <div class="rt-ai-field">
                             <div class="rt-ai-field-label">
                                 <label>Custom CSS</label>
+                                <span style="display: inline-flex; align-items: center; padding: 2px 8px; background: #f5f5f7; border-radius: 4px; font-size: 11px; color: #6e6e73; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">Advanced</span>
                             </div>
                             <div class="rt-ai-field-description">
-                                Override default styles with your own CSS. Use the "View Default CSS" button below to see available classes.
+                                For advanced users: Override any styles with your own CSS
                             </div>
                             <?php $this->field_custom_css(); ?>
                         </div>
@@ -2114,10 +2367,20 @@ class RivianTrackr_AI_Search {
             $version
         );
 
+        // Generate CSS from visual options
+        $generated_css = $this->generate_visual_options_css( $options );
+        
+        // Combine with custom CSS if provided
+        $final_css = $generated_css;
         if ( ! empty( $options['custom_css'] ) ) {
-                $custom_css = wp_strip_all_tags( $options['custom_css'] );
-                wp_add_inline_style( 'rt-ai-search', $custom_css );
-            }
+            $custom_css = wp_strip_all_tags( $options['custom_css'] );
+            $final_css .= "\n\n/* Custom CSS */\n" . $custom_css;
+        }
+        
+        // Output combined CSS
+        if ( ! empty( $final_css ) ) {
+            wp_add_inline_style( 'rt-ai-search', $final_css );
+        }
 
         wp_enqueue_script(
             'rt-ai-search',
@@ -2135,6 +2398,75 @@ class RivianTrackr_AI_Search {
                 'query'    => get_search_query(),
             )
         );
+    }
+
+    private function generate_visual_options_css( $options ) {
+        $css = '';
+        
+        // Extract values with defaults
+        $border_color = isset( $options['border_color'] ) ? $options['border_color'] : '#d2d2d7';
+        $bg_color = isset( $options['background_color'] ) ? $options['background_color'] : '#ffffff';
+        $text_color = isset( $options['text_color'] ) ? $options['text_color'] : '#1d1d1f';
+        $accent_color = isset( $options['accent_color'] ) ? $options['accent_color'] : '#0071e3';
+        $border_radius = isset( $options['border_radius'] ) ? intval( $options['border_radius'] ) : 10;
+        $border_style = isset( $options['border_style'] ) ? $options['border_style'] : 'solid';
+        
+        // Apply colors, border radius, and border style
+        $css .= "
+    .rt-ai-search-summary-inner {
+        border-color: {$border_color};
+        border-style: {$border_style};
+        background: {$bg_color};
+        color: {$text_color};
+        border-radius: {$border_radius}px;
+    }
+
+    .rt-ai-summary-header h2 {
+        color: {$text_color};
+    }
+
+    .rt-ai-sources-list a {
+        color: {$accent_color};
+    }
+
+    .rt-ai-openai-badge {
+        background: {$accent_color};
+        border-color: {$accent_color};
+    }
+
+    .rt-ai-loading-text {
+        color: {$text_color};
+    }
+    ";
+        
+        // Hide OpenAI badge if disabled
+        if ( empty( $options['show_badge'] ) ) {
+            $css .= "
+    .rt-ai-openai-badge {
+        display: none !important;
+    }
+    ";
+        }
+        
+        // Show sources expanded by default if enabled
+        if ( ! empty( $options['show_sources_expanded'] ) ) {
+            $css .= "
+    .rt-ai-sources-list {
+        display: block !important;
+    }
+    ";
+        }
+        
+        // Hide disclaimer if disabled
+        if ( empty( $options['show_disclaimer'] ) ) {
+            $css .= "
+    .rt-ai-search-disclaimer {
+        display: none !important;
+    }
+    ";
+        }
+        
+        return $css;
     }
 
     public function enqueue_admin_assets( $hook ) {
@@ -2159,8 +2491,20 @@ class RivianTrackr_AI_Search {
             array(),
             $version
         );
+        
+        wp_enqueue_style( 'wp-color-picker' );
+        wp_enqueue_script( 'wp-color-picker' );
+        
+        wp_add_inline_script( 'wp-color-picker', '
+            jQuery(document).ready(function($) {
+                $(".rt-ai-color-picker").wpColorPicker({
+                    change: function(event, ui) {
+                        $(event.target).val(ui.color.toString());
+                    }
+                });
+            });
+        ' );
     }
-
 
     public function inject_ai_summary_placeholder( $query ) {
         if ( ! $query->is_main_query() || ! $query->is_search() || is_admin() ) {
@@ -2179,6 +2523,8 @@ class RivianTrackr_AI_Search {
         $done = true;
 
         $search_query = get_search_query();
+        $show_badge = ! empty( $options['show_badge'] );
+        $show_disclaimer = ! empty( $options['show_disclaimer'] );
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
@@ -2186,10 +2532,12 @@ class RivianTrackr_AI_Search {
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
                     </h2>
-                    <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
-                        <span class="rt-ai-openai-mark" aria-hidden="true"></span>
-                        <span class="rt-ai-openai-text">Powered by OpenAI</span>
-                    </span>
+                    <?php if ( $show_badge ) : ?>
+                        <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
+                            <span class="rt-ai-openai-mark" aria-hidden="true"></span>
+                            <span class="rt-ai-openai-text">Powered by OpenAI</span>
+                        </span>
+                    <?php endif; ?>
                 </div>
 
                 <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content">
@@ -2197,18 +2545,15 @@ class RivianTrackr_AI_Search {
                     <p class="rt-ai-loading-text">Generating summary based on your search and RivianTrackr articles...</p>
                 </div>
 
-                <div class="rt-ai-search-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
-                    AI summaries are generated automatically based on RivianTrackr articles and may be inaccurate or incomplete. Always verify important details.
-                </div>
+                <?php if ( $show_disclaimer ) : ?>
+                    <div class="rt-ai-search-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
+                        AI summaries are generated automatically based on RivianTrackr articles and may be inaccurate or incomplete. Always verify important details.
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php
     }
-
-
-    /* ---------------------------------------------------------
-     *  REST API security helpers
-     * --------------------------------------------------------- */
 
     /**
      * Check if request is from a likely bot/crawler based on user agent.
