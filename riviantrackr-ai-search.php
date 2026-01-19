@@ -367,23 +367,24 @@ class RivianTrackr_AI_Search {
     public function field_api_key() {
         $options = $this->get_options();
         ?>
-        <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+        <div class="rt-ai-field-input">
             <input type="password" 
                    id="rt-ai-api-key"
                    name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
                    value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                   style="width: 400px;" 
+                   placeholder="sk-proj-..." 
                    autocomplete="off" />
-            
+        </div>
+        
+        <div class="rt-ai-field-actions">
             <button type="button" 
                     id="rt-ai-test-key-btn" 
-                    class="button"
-                    style="white-space: nowrap;">
+                    class="button">
                 Test Connection
             </button>
         </div>
         
-        <div id="rt-ai-test-result" style="margin-top: 0.5rem;"></div>
+        <div id="rt-ai-test-result"></div>
         
         <p class="description">
             Create an API key in the OpenAI dashboard and paste it here. 
@@ -393,18 +394,21 @@ class RivianTrackr_AI_Search {
         <script>
         (function($) {
             $(document).ready(function() {
-                $('#rt-ai-test-key-btn').on('click', function() {
-                    var btn = $(this);
-                    var apiKey = $('#rt-ai-api-key').val().trim();
-                    var resultDiv = $('#rt-ai-test-result');
+                var btn = $('#rt-ai-test-key-btn');
+                var apiKeyInput = $('#rt-ai-api-key');
+                var resultDiv = $('#rt-ai-test-result');
+                
+                btn.on('click', function() {
+                    var apiKey = apiKeyInput.val().trim();
                     
                     if (!apiKey) {
-                        resultDiv.html('<div class="notice notice-error inline"><p>Please enter an API key first.</p></div>');
+                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
                         return;
                     }
                     
+                    // Disable button and show loading
                     btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="notice notice-info inline"><p>Testing API key...</p></div>');
+                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
                     
                     $.ajax({
                         url: ajaxurl,
@@ -418,36 +422,25 @@ class RivianTrackr_AI_Search {
                             btn.prop('disabled', false).text('Test Connection');
                             
                             if (response.success) {
-                                var msg = '<strong>' + response.data.message + '</strong>';
+                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
                                 if (response.data.model_count) {
                                     msg += '<br>Available models: ' + response.data.model_count;
                                     msg += ' (Chat models: ' + response.data.chat_models + ')';
                                 }
-                                resultDiv.html('<div class="notice notice-success inline"><p>' + msg + '</p></div>');
+                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
                             } else {
-                                resultDiv.html('<div class="notice notice-error inline"><p><strong>Test failed:</strong> ' + response.data.message + '</p></div>');
+                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
                             }
                         },
                         error: function() {
                             btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="notice notice-error inline"><p>Request failed. Please try again.</p></div>');
+                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
                         }
                     });
                 });
             });
         })(jQuery);
         </script>
-        
-        <style>
-        .notice.inline {
-            display: inline-block;
-            margin: 0;
-            padding: 0.5rem 0.75rem;
-        }
-        .notice.inline p {
-            margin: 0;
-        }
-        </style>
         <?php
     }
 
@@ -646,16 +639,16 @@ class RivianTrackr_AI_Search {
         $options = $this->get_options();
         $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
         ?>
-        <div style="margin-bottom: 12px;">
+        <div class="rt-ai-css-editor-wrapper">
             <textarea 
                 name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
                 id="rt-ai-custom-css"
+                class="rt-ai-css-editor"
                 rows="15"
-                style="width: 100%; max-width: 700px; font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 13px; line-height: 1.6; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; background: #f5f5f7;"
                 placeholder="/* Add your custom CSS here */
-.rt-ai-search-summary {
-    /* Your custom styles */
-}"><?php echo esc_textarea( $custom_css ); ?></textarea>
+    .rt-ai-search-summary {
+        /* Your custom styles */
+    }"><?php echo esc_textarea( $custom_css ); ?></textarea>
         </div>
         
         <p class="description">
@@ -664,8 +657,8 @@ class RivianTrackr_AI_Search {
             <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
         </p>
         
-        <div style="margin-top: 12px;">
-            <button type="button" id="rt-ai-reset-css" class="button" style="margin-right: 8px;">
+        <div class="rt-ai-css-buttons">
+            <button type="button" id="rt-ai-reset-css" class="button">
                 Reset to Defaults
             </button>
             <button type="button" id="rt-ai-view-default-css" class="button">
@@ -673,47 +666,58 @@ class RivianTrackr_AI_Search {
             </button>
         </div>
         
-        <div id="rt-ai-default-css-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100000; align-items: center; justify-content: center;">
-            <div style="background: #fff; padding: 24px; border-radius: 12px; max-width: 800px; max-height: 80vh; overflow: auto; position: relative;">
-                <button type="button" id="rt-ai-close-modal" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: #6e6e73;">×</button>
-                <h2 style="margin: 0 0 16px 0; font-size: 20px;">Default CSS Reference</h2>
-                <p style="margin: 0 0 12px 0; color: #6e6e73; font-size: 14px;">Copy and modify these default styles to customize your AI search summary.</p>
-                <pre style="background: #f5f5f7; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.6;"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
+        <div id="rt-ai-default-css-modal" class="rt-ai-modal-overlay">
+            <div class="rt-ai-modal-content">
+                <button type="button" id="rt-ai-close-modal" class="rt-ai-modal-close" aria-label="Close">×</button>
+                <h2 class="rt-ai-modal-header">Default CSS Reference</h2>
+                <p class="rt-ai-modal-description">
+                    Copy and modify these default styles to customize your AI search summary.
+                </p>
+                <pre class="rt-ai-modal-code"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
             </div>
         </div>
         
         <script>
         (function($) {
             $(document).ready(function() {
+                var modal = $('#rt-ai-default-css-modal');
+                var textarea = $('#rt-ai-custom-css');
+                
+                // Reset CSS
                 $('#rt-ai-reset-css').on('click', function() {
                     if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
-                        $('#rt-ai-custom-css').val('');
+                        textarea.val('');
                     }
                 });
-
+                
+                // View default CSS
                 $('#rt-ai-view-default-css').on('click', function() {
-                    $('#rt-ai-default-css-modal').css('display', 'flex');
+                    modal.addClass('rt-ai-modal-open');
                 });
                 
-                $('#rt-ai-close-modal, #rt-ai-default-css-modal').on('click', function(e) {
+                // Close modal
+                $('#rt-ai-close-modal').on('click', function() {
+                    modal.removeClass('rt-ai-modal-open');
+                });
+                
+                // Close on background click
+                modal.on('click', function(e) {
                     if (e.target === this) {
-                        $('#rt-ai-default-css-modal').hide();
+                        modal.removeClass('rt-ai-modal-open');
+                    }
+                });
+                
+                // Close on ESC key
+                $(document).on('keydown', function(e) {
+                    if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
+                        modal.removeClass('rt-ai-modal-open');
                     }
                 });
             });
         })(jQuery);
         </script>
-        
-        <style>
-        #rt-ai-custom-css:focus {
-            outline: none;
-            border-color: #0071e3;
-            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
-            background: #fff;
-        }
-        </style>
         <?php
-    }
+    }    
 
     private function get_default_css() {
         return '@keyframes rt-ai-spin {
@@ -1290,7 +1294,7 @@ class RivianTrackr_AI_Search {
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="rt-ai-section">
                     <div class="rt-ai-section-header">
                         <h2>Appearance</h2>
@@ -1305,9 +1309,7 @@ class RivianTrackr_AI_Search {
                             <div class="rt-ai-field-description">
                                 Override default styles with your own CSS. Use the "View Default CSS" button below to see available classes.
                             </div>
-                            <div style="margin-top: 12px;">
-                                <?php $this->field_custom_css(); ?>
-                            </div>
+                            <?php $this->field_custom_css(); ?>
                         </div>
                     </div>
                 </div>
@@ -1327,12 +1329,12 @@ class RivianTrackr_AI_Search {
                     var resultDiv = $('#rt-ai-test-result');
                     
                     if (!apiKey) {
-                        resultDiv.html('<div style="color: #c41e3a; font-size: 14px;">Please enter an API key first.</div>');
+                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
                         return;
                     }
                     
                     btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div style="color: #86868b; font-size: 14px;">Testing API key...</div>');
+                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
                     
                     $.ajax({
                         url: ajaxurl,
@@ -1346,24 +1348,25 @@ class RivianTrackr_AI_Search {
                             btn.prop('disabled', false).text('Test Connection');
                             
                             if (response.success) {
-                                var msg = '<strong style="color: #0a5e2a;">✓ ' + response.data.message + '</strong>';
+                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
                                 if (response.data.model_count) {
-                                    msg += '<br><span style="color: #86868b; font-size: 13px;">Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')</span>';
+                                    msg += '<br>Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')';
                                 }
-                                resultDiv.html('<div style="color: #0a5e2a; font-size: 14px;">' + msg + '</div>');
+                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
                             } else {
-                                resultDiv.html('<div style="color: #c41e3a; font-size: 14px;"><strong>✗ Test failed:</strong> ' + response.data.message + '</div>');
+                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
                             }
                         },
                         error: function() {
                             btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div style="color: #c41e3a; font-size: 14px;">Request failed. Please try again.</div>');
+                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
                         }
                     });
                 });
             });
         })(jQuery);
         </script>
+        
         <?php
     }
 
