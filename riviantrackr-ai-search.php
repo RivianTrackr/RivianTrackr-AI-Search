@@ -4,28 +4,20 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.2
+ * Version: 3.3.3
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.2' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.3' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
-
-// Cache settings
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
 define( 'RT_AI_SEARCH_DEFAULT_CACHE_TTL', 3600 );
-
-// Content length limits
 define( 'RT_AI_SEARCH_CONTENT_LENGTH', 400 );
 define( 'RT_AI_SEARCH_EXCERPT_LENGTH', 200 );
-
-// Display limits
 define( 'RT_AI_SEARCH_MAX_SOURCES_DISPLAY', 5 );
-
-// API settings
 define( 'RT_AI_SEARCH_API_TIMEOUT', 60 );
 define( 'RT_AI_SEARCH_RATE_LIMIT_WINDOW', 70 );
 
@@ -60,8 +52,6 @@ class RivianTrackr_AI_Search {
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
-
-        // Adds "Settings" link on Plugins page
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
     }
 
@@ -80,10 +70,6 @@ class RivianTrackr_AI_Search {
             RT_AI_SEARCH_VERSION
         );
     }
-
-    /* ---------------------------------------------------------
-     *  Logs table helpers
-     * --------------------------------------------------------- */
 
     private static function get_logs_table_name() {
         global $wpdb;
@@ -113,10 +99,6 @@ class RivianTrackr_AI_Search {
         dbDelta( $sql );
     }
 
-    /**
-     * Add missing indexes to existing table (for upgrades).
-     * Called during plugin activation or via admin action.
-     */
     private static function add_missing_indexes() {
         global $wpdb;
         $table_name = self::get_logs_table_name();
@@ -217,7 +199,6 @@ class RivianTrackr_AI_Search {
             )
         );
 
-        // Log database errors for debugging
         if ( false === $result ) {
             error_log( 
                 '[RivianTrackr AI Search] Failed to log search event: ' . 
@@ -226,10 +207,6 @@ class RivianTrackr_AI_Search {
             );
         }
     }
-
-    /* ---------------------------------------------------------
-     *  Options and settings
-     * --------------------------------------------------------- */
 
     public function get_options() {
         if ( is_array( $this->options_cache ) ) {
@@ -243,6 +220,7 @@ class RivianTrackr_AI_Search {
             'enable'               => 0,
             'max_calls_per_minute' => 30,
             'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+            'custom_css'           => '',
         );
 
         $opts = get_option( $this->option_name, array() );
@@ -274,6 +252,8 @@ class RivianTrackr_AI_Search {
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
+
+        $output['custom_css'] = isset( $input['custom_css'] ) ? wp_strip_all_tags( $input['custom_css'] ) : '';
 
         $this->options_cache = null;
 
@@ -374,6 +354,14 @@ class RivianTrackr_AI_Search {
             'rt-ai-search',
             'rt_ai_search_main'
         );
+
+        add_settings_field(
+            'custom_css',
+            'Custom CSS',
+            array( $this, 'field_custom_css' ),
+            'rt-ai-search',
+            'rt_ai_search_main'
+        );
     }
 
     public function field_api_key() {
@@ -415,7 +403,6 @@ class RivianTrackr_AI_Search {
                         return;
                     }
                     
-                    // Disable button and show loading
                     btn.prop('disabled', true).text('Testing...');
                     resultDiv.html('<div class="notice notice-info inline"><p>Testing API key...</p></div>');
                     
@@ -472,7 +459,6 @@ class RivianTrackr_AI_Search {
             );
         }
 
-        // Make a simple API call to verify the key works
         $response = wp_safe_remote_get(
             'https://api.openai.com/v1/models',
             array(
@@ -637,7 +623,6 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    // Update field_cache_ttl() to use constants
     public function field_cache_ttl() {
         $options = $this->get_options();
         $value   = isset( $options['cache_ttl'] ) ? (int) $options['cache_ttl'] : RT_AI_SEARCH_DEFAULT_CACHE_TTL;
@@ -657,9 +642,191 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    /* ---------------------------------------------------------
-     *  Model list helpers - Updated with better filtering
-     * --------------------------------------------------------- */
+    public function field_custom_css() {
+        $options = $this->get_options();
+        $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
+        ?>
+        <div style="margin-bottom: 12px;">
+            <textarea 
+                name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
+                id="rt-ai-custom-css"
+                rows="15"
+                style="width: 100%; max-width: 700px; font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace; font-size: 13px; line-height: 1.6; padding: 12px; border: 1px solid #d2d2d7; border-radius: 8px; background: #f5f5f7;"
+                placeholder="/* Add your custom CSS here */
+.rt-ai-search-summary {
+    /* Your custom styles */
+}"><?php echo esc_textarea( $custom_css ); ?></textarea>
+        </div>
+        
+        <p class="description">
+            Add custom CSS to style the AI search summary. This will override the default styles.
+            <br>
+            <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
+        </p>
+        
+        <div style="margin-top: 12px;">
+            <button type="button" id="rt-ai-reset-css" class="button" style="margin-right: 8px;">
+                Reset to Defaults
+            </button>
+            <button type="button" id="rt-ai-view-default-css" class="button">
+                View Default CSS
+            </button>
+        </div>
+        
+        <div id="rt-ai-default-css-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100000; align-items: center; justify-content: center;">
+            <div style="background: #fff; padding: 24px; border-radius: 12px; max-width: 800px; max-height: 80vh; overflow: auto; position: relative;">
+                <button type="button" id="rt-ai-close-modal" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: #6e6e73;">×</button>
+                <h2 style="margin: 0 0 16px 0; font-size: 20px;">Default CSS Reference</h2>
+                <p style="margin: 0 0 12px 0; color: #6e6e73; font-size: 14px;">Copy and modify these default styles to customize your AI search summary.</p>
+                <pre style="background: #f5f5f7; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.6;"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
+            </div>
+        </div>
+        
+        <script>
+        (function($) {
+            $(document).ready(function() {
+                $('#rt-ai-reset-css').on('click', function() {
+                    if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
+                        $('#rt-ai-custom-css').val('');
+                    }
+                });
+
+                $('#rt-ai-view-default-css').on('click', function() {
+                    $('#rt-ai-default-css-modal').css('display', 'flex');
+                });
+                
+                $('#rt-ai-close-modal, #rt-ai-default-css-modal').on('click', function(e) {
+                    if (e.target === this) {
+                        $('#rt-ai-default-css-modal').hide();
+                    }
+                });
+            });
+        })(jQuery);
+        </script>
+        
+        <style>
+        #rt-ai-custom-css:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+            background: #fff;
+        }
+        </style>
+        <?php
+    }
+
+    private function get_default_css() {
+        return '@keyframes rt-ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rt-ai-search-summary-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.rt-ai-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(148,163,184,0.5);
+  border-top-color: #22c55e;
+  display: inline-block;
+  animation: rt-ai-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.rt-ai-loading-text {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.rt-ai-search-summary-content.rt-ai-loaded {
+  display: block;
+}
+
+.rt-ai-openai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.5);
+  background: rgba(15,23,42,0.9);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  opacity: 0.95;
+}
+
+.rt-ai-openai-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.8);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rt-ai-openai-mark::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+  background: linear-gradient(135deg,#22c55e,#3b82f6);
+}
+
+.rt-ai-sources {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.rt-ai-sources-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 0.4rem 0;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 0.95;
+  color: #e5e7eb;
+}
+
+.rt-ai-sources-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.rt-ai-sources-list li {
+  margin-bottom: 0.4rem;
+}
+
+.rt-ai-sources-list li:last-child {
+  margin-bottom: 0;
+}
+
+.rt-ai-sources-list a {
+  color: #22c55e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rt-ai-sources-list a:hover {
+  opacity: 0.9;
+}
+
+.rt-ai-sources-list span {
+  display: block;
+  opacity: 0.8;
+  color: #cbd5f5;
+}';
+    }
 
     private function fetch_models_from_openai( $api_key ) {
         if ( empty( $api_key ) ) {
@@ -1123,15 +1290,34 @@ class RivianTrackr_AI_Search {
                         </div>
                     </div>
                 </div>
+                
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Appearance</h2>
+                        <p>Customize how the AI search summary looks on your site</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <!-- Custom CSS -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Custom CSS</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Override default styles with your own CSS. Use the "View Default CSS" button below to see available classes.
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <?php $this->field_custom_css(); ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- Save Button -->
                 <div class="rt-ai-footer-actions">
                     <?php submit_button( 'Save Settings', 'primary rt-ai-button rt-ai-button-primary', 'submit', false ); ?>
                 </div>
             </form>
         </div>
 
-        <!-- Test API Key JavaScript (keep existing) -->
         <script>
         (function($) {
             $(document).ready(function() {
@@ -1926,6 +2112,11 @@ class RivianTrackr_AI_Search {
             array(),
             $version
         );
+
+        if ( ! empty( $options['custom_css'] ) ) {
+                $custom_css = wp_strip_all_tags( $options['custom_css'] );
+                wp_add_inline_style( 'rt-ai-search', $custom_css );
+            }
 
         wp_enqueue_script(
             'rt-ai-search',
