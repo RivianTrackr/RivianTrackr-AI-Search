@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+die('✓ FILE IS LOADING!');
 /**
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
