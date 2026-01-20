@@ -631,12 +631,6 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    <?php
-    /**
-     * CORRECTED field_custom_css() method
-     * Replace your existing method with this one
-     */
-
     public function field_custom_css() {
         $options = $this->get_options();
         $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
