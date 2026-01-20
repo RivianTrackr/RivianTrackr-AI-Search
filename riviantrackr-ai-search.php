@@ -1,4 +1,5 @@
 <?php
+error_log('🔴 Plugin file loaded at ' . date('Y-m-d H:i:s'));
 declare(strict_types=1);
 /**
  * Plugin Name: RivianTrackr AI Search
@@ -443,27 +444,44 @@ class RivianTrackr_AI_Search {
     }
 
     public function field_api_key() {
-        $options = $this->get_options();
-        $has_key = !empty($options['api_key']);
+        // FIRST: Just prove this method is running
+        echo '<h1 style="background: red; color: white; padding: 20px;">🔴 DEBUG MODE ACTIVE - THIS METHOD IS RUNNING!</h1>';
         
-        // DEBUG: Show what we're detecting
-        echo '<!-- DEBUG INFO -->';
-        echo '<!-- API Key exists: ' . ($has_key ? 'YES' : 'NO') . ' -->';
-        echo '<!-- API Key length: ' . strlen($options['api_key']) . ' -->';
-        echo '<!-- API Key first chars: ' . substr($options['api_key'], 0, 10) . '... -->';
-        echo '<!-- END DEBUG INFO -->';
+        // SECOND: Try to get options and show what happens
+        try {
+            $options = $this->get_options();
+            echo '<div style="background: yellow; border: 5px solid red; padding: 20px; margin: 20px 0;">';
+            echo '<h2>DEBUG: Options Retrieved Successfully</h2>';
+            echo '<pre>';
+            echo 'Full options array:' . "\n";
+            print_r($options);
+            echo "\n\n";
+            echo 'API Key value specifically: ';
+            var_dump($options['api_key']);
+            echo "\n\n";
+            echo 'Is API key empty? ' . (empty($options['api_key']) ? 'YES (empty)' : 'NO (has value)');
+            echo "\n\n";
+            echo 'API Key length: ' . strlen($options['api_key']) . ' characters';
+            echo '</pre>';
+            echo '</div>';
+            
+            $has_key = !empty($options['api_key']);
+            
+            echo '<div style="background: ' . ($has_key ? 'lightgreen' : 'lightcoral') . '; padding: 20px; border: 3px solid black;">';
+            echo '<h2>$has_key = ' . ($has_key ? 'TRUE' : 'FALSE') . '</h2>';
+            echo '<p>Button will be: <strong>' . ($has_key ? 'SHOWN' : 'HIDDEN') . '</strong></p>';
+            echo '</div>';
+            
+        } catch (Exception $e) {
+            echo '<div style="background: red; color: white; padding: 20px; margin: 20px 0;">';
+            echo '<h2>ERROR getting options:</h2>';
+            echo '<p>' . $e->getMessage() . '</p>';
+            echo '</div>';
+        }
         
         // Show masked version if key exists
         $display_value = $has_key ? '••••••••••••••••••••••••' : '';
         ?>
-        
-        <!-- DEBUG: Visual indicator -->
-        <div style="background: #fff3cd; padding: 10px; margin-bottom: 10px; border-left: 4px solid #ffc107;">
-            <strong>DEBUG MODE:</strong> 
-            API Key Detected: <strong><?php echo $has_key ? 'YES ✓' : 'NO ✗'; ?></strong><br>
-            Key Length: <?php echo strlen($options['api_key']); ?> characters<br>
-            First 10 chars: <code><?php echo esc_html(substr($options['api_key'], 0, 10)); ?>...</code>
-        </div>
         
         <div class="rt-ai-field-input">
             <input type="password" 
@@ -471,17 +489,11 @@ class RivianTrackr_AI_Search {
                    name="<?php echo esc_attr($this->option_name); ?>[api_key]"
                    value="<?php echo esc_attr($display_value); ?>"
                    placeholder="<?php echo $has_key ? 'API key is set (hidden for security)' : 'sk-proj-...'; ?>"
-                   autocomplete="off" 
-                   spellcheck="false" />
+                   autocomplete="off" />
             
             <?php if ($has_key) : ?>
                 <p class="description" style="margin-top: 8px; color: #0a5e2a;">
-                    <strong>✓ API key is set and encrypted.</strong> Leave this field as-is to keep your existing key, 
-                    or paste a new key to replace it.
-                </p>
-            <?php else : ?>
-                <p class="description" style="margin-top: 8px; color: #d63638;">
-                    <strong>✗ No API key detected.</strong> This is why the Remove button isn't showing.
+                    <strong>✓ API key is set.</strong>
                 </p>
             <?php endif; ?>
         </div>
@@ -500,9 +512,12 @@ class RivianTrackr_AI_Search {
                         style="color: #d63638; border-color: #d63638;">
                     Remove API Key
                 </button>
+                <span style="background: lime; padding: 5px; margin-left: 10px;">
+                    ✓ BUTTON SHOULD BE VISIBLE ABOVE
+                </span>
             <?php else : ?>
-                <span style="color: #d63638; font-style: italic;">
-                    (Remove button hidden - no API key detected)
+                <span style="background: orange; padding: 5px; margin-left: 10px;">
+                    ✗ BUTTON HIDDEN - NO API KEY DETECTED
                 </span>
             <?php endif; ?>
         </div>
@@ -510,115 +525,15 @@ class RivianTrackr_AI_Search {
         <div id="rt-ai-test-result"></div>
         
         <p class="description">
-            Create an API key in the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI dashboard</a> and paste it here. 
-            Use the "Test Connection" button to verify it works.
-            <br>
-            <strong>🔒 Your API key is encrypted before being stored in the database.</strong>
+            Debug mode active - remove this version after testing.
         </p>
         
         <script>
         (function($) {
             $(document).ready(function() {
-                var btn = $('#rt-ai-test-key-btn');
-                var removeBtn = $('#rt-ai-remove-key-btn');
-                var apiKeyInput = $('#rt-ai-api-key');
-                var resultDiv = $('#rt-ai-test-result');
-                var hasExistingKey = <?php echo $has_key ? 'true' : 'false'; ?>;
-                var fieldTouched = false;
-                
-                console.log('DEBUG: hasExistingKey =', hasExistingKey);
-                console.log('DEBUG: Remove button exists =', removeBtn.length > 0);
-                
-                // Track if user has modified the field
-                apiKeyInput.on('input', function() {
-                    fieldTouched = true;
-                });
-                
-                // Test API key
-                btn.on('click', function() {
-                    var apiKey = apiKeyInput.val().trim();
-                    
-                    // If field shows masked key and user hasn't changed it, test existing key
-                    if (hasExistingKey && !fieldTouched && apiKey.indexOf('•') === 0) {
-                        apiKey = 'USE_EXISTING'; // Signal to use stored key
-                    }
-                    
-                    if (!apiKey) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
-                        return;
-                    }
-                    
-                    // Don't test if it's just the masked value and field was cleared
-                    if (apiKey.indexOf('•') === 0 && fieldTouched) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter a valid API key.</p></div>');
-                        return;
-                    }
-                    
-                    btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'rt_ai_test_api_key',
-                            api_key: apiKey,
-                            nonce: '<?php echo wp_create_nonce('rt_ai_test_key'); ?>'
-                        },
-                        success: function(response) {
-                            btn.prop('disabled', false).text('Test Connection');
-                            
-                            if (response.success) {
-                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
-                                if (response.data.model_count) {
-                                    msg += '<br>Available models: ' + response.data.model_count;
-                                    msg += ' (Chat models: ' + response.data.chat_models + ')';
-                                }
-                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
-                            }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
-                        }
-                    });
-                });
-                
-                // Remove API key
-                if (removeBtn.length > 0) {
-                    console.log('DEBUG: Remove button found, attaching click handler');
-                    removeBtn.on('click', function() {
-                        console.log('DEBUG: Remove button clicked');
-                        if (confirm('Are you sure you want to remove your API key? This will disable AI search until you add a new key.')) {
-                            apiKeyInput.val('');
-                            apiKeyInput.attr('placeholder', 'sk-proj-...');
-                            removeBtn.remove();
-                            hasExistingKey = false;
-                            fieldTouched = true;
-                            resultDiv.html('<div class="rt-ai-test-result info"><p><strong>API key will be removed when you save settings.</strong> Don\'t forget to click "Save Settings" below.</p></div>');
-                            
-                            // Remove the success message
-                            apiKeyInput.next('.description').remove();
-                        }
-                    });
-                } else {
-                    console.log('DEBUG: Remove button NOT found in DOM');
-                }
-                
-                // Clear masked value on focus so user can paste new key
-                apiKeyInput.on('focus', function() {
-                    if ($(this).val().indexOf('•') === 0) {
-                        $(this).val('');
-                        $(this).attr('placeholder', 'Paste new API key here to replace existing key');
-                    }
-                });
-                
-                // If user pastes, mark as touched
-                apiKeyInput.on('paste', function() {
-                    fieldTouched = true;
-                });
+                console.log('🔴 DEBUG: JavaScript loaded');
+                console.log('Has existing key:', <?php echo $has_key ? 'true' : 'false'; ?>);
+                console.log('Remove button exists:', $('#rt-ai-remove-key-btn').length > 0);
             });
         })(jQuery);
         </script>
