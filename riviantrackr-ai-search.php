@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.7
+ * Version: 3.3.6
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.7' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.6' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -444,27 +444,25 @@ class RivianTrackr_AI_Search {
 
     public function field_api_key() {
         $options = $this->get_options();
-        
-        // FORCE TRUE FOR TESTING
-        $has_key = true;  // ← Normally this would be: !empty($options['api_key'])
+        $has_key = !empty($options['api_key']);
         
         $display_value = $has_key ? '••••••••••••••••••••••••' : '';
         ?>
-        
-        <!-- VISUAL INDICATOR THAT WE'RE IN TEST MODE -->
-        <div style="background: lime; border: 3px solid green; padding: 15px; margin-bottom: 20px;">
-            <h2 style="margin: 0;">🧪 TEST MODE: Button Forced To Show</h2>
-            <p style="margin: 5px 0 0 0;">If you see the "Remove API Key" button below, the button itself works!</p>
-        </div>
-        
         <div class="rt-ai-field-input">
             <input type="password" 
                    id="rt-ai-api-key"
                    name="<?php echo esc_attr($this->option_name); ?>[api_key]"
                    value="<?php echo esc_attr($display_value); ?>"
-                   placeholder="sk-proj-..."
+                   placeholder="<?php echo $has_key ? 'API key is set (hidden for security)' : 'sk-proj-...'; ?>"
                    autocomplete="off" 
                    spellcheck="false" />
+            
+            <?php if ($has_key) : ?>
+                <p class="description" style="margin-top: 8px; color: #0a5e2a;">
+                    <strong>✓ API key is set and encrypted.</strong> Leave this field as-is to keep your existing key, 
+                    or paste a new key to replace it.
+                </p>
+            <?php endif; ?>
         </div>
         
         <div class="rt-ai-field-actions">
@@ -474,46 +472,53 @@ class RivianTrackr_AI_Search {
                 Test Connection
             </button>
             
-            <!-- FORCE THIS TO ALWAYS RENDER -->
-            <button type="button" 
-                    id="rt-ai-remove-key-btn" 
-                    class="rt-ai-button rt-ai-button-secondary"
-                    style="color: #d63638; border-color: #d63638;">
-                Remove API Key (TEST MODE)
-            </button>
-            
-            <span style="background: yellow; padding: 5px; margin-left: 10px;">
-                👈 Do you see this button?
-            </span>
+            <?php if ($has_key) : ?>
+                <button type="button" 
+                        id="rt-ai-remove-key-btn" 
+                        class="rt-ai-button rt-ai-button-secondary"
+                        style="color: #d63638; border-color: #d63638;">
+                    Remove API Key
+                </button>
+            <?php endif; ?>
         </div>
         
         <div id="rt-ai-test-result"></div>
         
         <p class="description">
-            🧪 TEST MODE ACTIVE - Button is forced to show
+            Create an API key in the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI dashboard</a> and paste it here. 
+            Use the "Test Connection" button to verify it works.
+            <br>
+            <strong>🔒 Your API key is encrypted before being stored in the database.</strong>
         </p>
         
         <script>
         (function($) {
             $(document).ready(function() {
-                console.log('🧪 TEST MODE: JavaScript loaded');
-                console.log('Remove button exists in DOM:', $('#rt-ai-remove-key-btn').length > 0);
-                
                 var btn = $('#rt-ai-test-key-btn');
                 var removeBtn = $('#rt-ai-remove-key-btn');
                 var apiKeyInput = $('#rt-ai-api-key');
                 var resultDiv = $('#rt-ai-test-result');
+                var hasExistingKey = <?php echo $has_key ? 'true' : 'false'; ?>;
+                var fieldTouched = false;
                 
-                // Test button
+                apiKeyInput.on('input', function() {
+                    fieldTouched = true;
+                });
+                
                 btn.on('click', function() {
                     var apiKey = apiKeyInput.val().trim();
                     
-                    if (!apiKey || apiKey.indexOf('•') === 0) {
-                        apiKey = 'USE_EXISTING';
+                    if (hasExistingKey && !fieldTouched && apiKey.indexOf('•') === 0) {
+                        apiKey = 'USE_EXISTING'; // Signal to use stored key
                     }
                     
                     if (!apiKey) {
                         resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
+                        return;
+                    }
+                    
+                    if (apiKey.indexOf('•') === 0 && fieldTouched) {
+                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter a valid API key.</p></div>');
                         return;
                     }
                     
@@ -549,25 +554,28 @@ class RivianTrackr_AI_Search {
                     });
                 });
                 
-                // Remove button
                 removeBtn.on('click', function() {
-                    console.log('🧪 Remove button clicked!');
-                    
-                    if (confirm('TEST MODE: Remove API key?')) {
-                        console.log('🧪 User confirmed removal');
+                    if (confirm('Are you sure you want to remove your API key? This will disable AI search until you add a new key.')) {
                         apiKeyInput.val('');
-                        resultDiv.html('<div class="rt-ai-test-result info"><p><strong>✓ TEST: Key will be removed when you save settings.</strong></p></div>');
-                    } else {
-                        console.log('🧪 User cancelled');
+                        apiKeyInput.attr('placeholder', 'sk-proj-...');
+                        removeBtn.remove();
+                        hasExistingKey = false;
+                        fieldTouched = true;
+                        resultDiv.html('<div class="rt-ai-test-result info"><p><strong>API key will be removed when you save settings.</strong> Don\'t forget to click "Save Settings" below.</p></div>');
+                        
+                        apiKeyInput.next('.description').remove();
                     }
                 });
                 
-                // Clear masked value on focus
                 apiKeyInput.on('focus', function() {
                     if ($(this).val().indexOf('•') === 0) {
                         $(this).val('');
-                        $(this).attr('placeholder', 'Paste new API key here');
+                        $(this).attr('placeholder', 'Paste new API key here to replace existing key');
                     }
+                });
+                
+                apiKeyInput.on('paste', function() {
+                    fieldTouched = true;
                 });
             });
         })(jQuery);
