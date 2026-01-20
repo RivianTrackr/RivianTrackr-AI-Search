@@ -2138,6 +2138,49 @@ class RivianTrackr_AI_Search {
         );
     }
 
+    public function inject_ai_summary_placeholder( $query ) {
+        if ( ! $query->is_main_query() || ! $query->is_search() || is_admin() ) {
+            return;
+        }
+
+        $options = $this->get_options();
+        if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
+            return;
+        }
+
+        static $done = false;
+        if ( $done ) {
+            return;
+        }
+        $done = true;
+
+        $search_query = get_search_query();
+        ?>
+        <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
+            <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
+                <div class="rt-ai-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
+                    <h2 style="margin:0; font-size:1.1rem;">
+                        AI summary for "<?php echo esc_html( $search_query ); ?>"
+                    </h2>
+                    <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
+                        <span class="rt-ai-openai-mark" aria-hidden="true"></span>
+                        <span class="rt-ai-openai-text">Powered by OpenAI</span>
+                    </span>
+                </div>
+
+                <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content">
+                    <span class="rt-ai-spinner"></span>
+                    <p class="rt-ai-loading-text">Generating summary based on your search and RivianTrackr articles...</p>
+                </div>
+
+                <div class="rt-ai-search-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
+                    AI summaries are generated automatically based on RivianTrackr articles and may be inaccurate or incomplete. Always verify important details.
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
     public function enqueue_admin_assets( $hook ) {
         $allowed_hooks = array(
             'toplevel_page_rt-ai-search-settings',
