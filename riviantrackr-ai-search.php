@@ -55,6 +55,73 @@ class RivianTrackr_AI_Search {
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
     }
 
+    private function get_encryption_key() {
+        $key = AUTH_KEY . SECURE_AUTH_KEY . LOGGED_IN_KEY . NONCE_KEY;
+        return hash('sha256', $key, true);
+    }
+
+    private function encrypt_api_key($plaintext) {
+        if (empty($plaintext)) {
+            return '';
+        }
+        
+        $key = $this->get_encryption_key();
+        $iv_length = openssl_cipher_iv_length('aes-256-cbc');
+        $iv = openssl_random_pseudo_bytes($iv_length);
+        
+        $encrypted = openssl_encrypt(
+            $plaintext,
+            'aes-256-cbc',
+            $key,
+            OPENSSL_RAW_DATA,
+            $iv
+        );
+        
+        if ($encrypted === false) {
+            error_log('[RivianTrackr AI Search] Encryption failed');
+            return '';
+        }
+        
+        return base64_encode($iv . $encrypted);
+    }
+
+    private function decrypt_api_key($encrypted) {
+        if (empty($encrypted)) {
+            return '';
+        }
+        
+        if (strpos($encrypted, 'sk-') === 0) {
+            return $encrypted;
+        }
+        
+        $key = $this->get_encryption_key();
+        $data = base64_decode($encrypted);
+        
+        if ($data === false) {
+            error_log('[RivianTrackr AI Search] Base64 decode failed');
+            return '';
+        }
+        
+        $iv_length = openssl_cipher_iv_length('aes-256-cbc');
+        $iv = substr($data, 0, $iv_length);
+        $encrypted_data = substr($data, $iv_length);
+        
+        $decrypted = openssl_decrypt(
+            $encrypted_data,
+            'aes-256-cbc',
+            $key,
+            OPENSSL_RAW_DATA,
+            $iv
+        );
+        
+        if ($decrypted === false) {
+            error_log('[RivianTrackr AI Search] Decryption failed');
+            return '';
+        }
+        
+        return $decrypted;
+    }
+
     public function add_plugin_settings_link( $links ) {
         $url = admin_url( 'admin.php?page=rt-ai-search-settings' );
         $settings_link = '<a href="' . esc_url( $url ) . '">Settings</a>';
@@ -209,7 +276,7 @@ class RivianTrackr_AI_Search {
     }
 
     public function get_options() {
-        if ( is_array( $this->options_cache ) ) {
+        if (is_array($this->options_cache)) {
             return $this->options_cache;
         }
 
@@ -223,34 +290,49 @@ class RivianTrackr_AI_Search {
             'custom_css'           => '',
         );
 
-        $opts = get_option( $this->option_name, array() );
-        $this->options_cache = wp_parse_args( is_array( $opts ) ? $opts : array(), $defaults );
+        $opts = get_option($this->option_name, array());
+        $this->options_cache = wp_parse_args(is_array($opts) ? $opts : array(), $defaults);
+        
+        if (!empty($this->options_cache['api_key'])) {
+            $this->options_cache['api_key'] = $this->decrypt_api_key($this->options_cache['api_key']);
+        }
 
         return $this->options_cache;
     }
 
-    public function sanitize_options( $input ) {
+    public function sanitize_options($input) {
         $output = array();
 
-        $output['api_key']   = isset( $input['api_key'] ) ? trim( $input['api_key'] ) : '';
-        $output['model']     = isset( $input['model'] ) ? sanitize_text_field( $input['model'] ) : 'gpt-4o-mini';  // Updated default
-        $output['max_posts'] = isset( $input['max_posts'] ) ? max( 1, intval( $input['max_posts'] ) ) : 10;
-        $output['enable']    = ! empty( $input['enable'] ) ? 1 : 0;
-        $output['max_calls_per_minute'] = isset( $input['max_calls_per_minute'] )
-            ? max( 0, intval( $input['max_calls_per_minute'] ) )
+        if (isset($input['api_key'])) {
+            $api_key = trim($input['api_key']);
+            
+            if (!empty($api_key)) {
+                $output['api_key'] = $this->encrypt_api_key($api_key);
+            } else {
+                $output['api_key'] = '';
+            }
+        }
+        
+        $output['model']     = isset($input['model']) ? sanitize_text_field($input['model']) : 'gpt-4o-mini';
+        $output['max_posts'] = isset($input['max_posts']) ? max(1, intval($input['max_posts'])) : 10;
+        $output['enable']    = !empty($input['enable']) ? 1 : 0;
+        $output['max_calls_per_minute'] = isset($input['max_calls_per_minute'])
+            ? max(0, intval($input['max_calls_per_minute']))
             : 30;
-        if ( isset( $input['cache_ttl'] ) ) {
-            $ttl = intval( $input['cache_ttl'] );
-            if ( $ttl < RT_AI_SEARCH_MIN_CACHE_TTL ) {
+        
+        if (isset($input['cache_ttl'])) {
+            $ttl = intval($input['cache_ttl']);
+            if ($ttl < RT_AI_SEARCH_MIN_CACHE_TTL) {
                 $ttl = RT_AI_SEARCH_MIN_CACHE_TTL;
-            } elseif ( $ttl > RT_AI_SEARCH_MAX_CACHE_TTL ) {
+            } elseif ($ttl > RT_AI_SEARCH_MAX_CACHE_TTL) {
                 $ttl = RT_AI_SEARCH_MAX_CACHE_TTL;
             }
             $output['cache_ttl'] = $ttl;
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
-        $output['custom_css'] = isset( $input['custom_css'] ) ? wp_strip_all_tags( $input['custom_css'] ) : '';
+        
+        $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
         $this->options_cache = null;
         return $output;
