@@ -42,8 +42,12 @@ class RivianTrackr_AI_Search {
     public function __construct() {
         
         $this->cache_prefix = 'rt_ai_search_v' . str_replace( '.', '_', RT_AI_SEARCH_VERSION ) . '_';
+        
+        add_action( 'plugins_loaded', array( $this, 'register_settings' ), 1 );
+        add_action( 'init', array( $this, 'register_settings' ), 1 );
+        add_action( 'admin_init', array( $this, 'register_settings' ), 1 );
+        add_action( 'admin_head', array( $this, 'force_register_if_needed' ) );
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
-        add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
@@ -53,6 +57,15 @@ class RivianTrackr_AI_Search {
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
+    }
+
+    public function force_register_if_needed() {
+        global $wp_registered_settings;
+        
+        if (!isset($wp_registered_settings[$this->option_name])) {
+            error_log('[RivianTrackr AI Search] FORCING registration - option was not registered!');
+            $this->register_settings();
+        }
     }
 
     public function add_plugin_settings_link( $links ) {
@@ -230,29 +243,44 @@ class RivianTrackr_AI_Search {
     }
 
     public function sanitize_options( $input ) {
+        error_log('[RivianTrackr AI Search] sanitize_options() called');
+        error_log('[RivianTrackr AI Search] Input received: ' . print_r($input, true));
+        
+        if (!is_array($input)) {
+            error_log('[RivianTrackr AI Search] WARNING: Input is not an array!');
+            $input = array();
+        }
+        
         $output = array();
 
-        $output['api_key']   = isset( $input['api_key'] ) ? trim( $input['api_key'] ) : '';
-        $output['model']     = isset( $input['model'] ) ? sanitize_text_field( $input['model'] ) : 'gpt-4o-mini';  // Updated default
-        $output['max_posts'] = isset( $input['max_posts'] ) ? max( 1, intval( $input['max_posts'] ) ) : 10;
-        $output['enable'] = isset( $input['enable'] ) && $input['enable'] ? 1 : 0;
-        $output['max_calls_per_minute'] = isset( $input['max_calls_per_minute'] )
-            ? max( 0, intval( $input['max_calls_per_minute'] ) )
+        $output['api_key']   = isset($input['api_key']) ? trim($input['api_key']) : '';
+        $output['model']     = isset($input['model']) ? sanitize_text_field($input['model']) : 'gpt-4o-mini';
+        $output['max_posts'] = isset($input['max_posts']) ? max(1, intval($input['max_posts'])) : 10;
+        
+        $output['enable'] = isset($input['enable']) && $input['enable'] ? 1 : 0;
+        
+        $output['max_calls_per_minute'] = isset($input['max_calls_per_minute'])
+            ? max(0, intval($input['max_calls_per_minute']))
             : 30;
-        if ( isset( $input['cache_ttl'] ) ) {
-            $ttl = intval( $input['cache_ttl'] );
-            if ( $ttl < RT_AI_SEARCH_MIN_CACHE_TTL ) {
+            
+        if (isset($input['cache_ttl'])) {
+            $ttl = intval($input['cache_ttl']);
+            if ($ttl < RT_AI_SEARCH_MIN_CACHE_TTL) {
                 $ttl = RT_AI_SEARCH_MIN_CACHE_TTL;
-            } elseif ( $ttl > RT_AI_SEARCH_MAX_CACHE_TTL ) {
+            } elseif ($ttl > RT_AI_SEARCH_MAX_CACHE_TTL) {
                 $ttl = RT_AI_SEARCH_MAX_CACHE_TTL;
             }
             $output['cache_ttl'] = $ttl;
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
-        $output['custom_css'] = isset( $input['custom_css'] ) ? wp_strip_all_tags( $input['custom_css'] ) : '';
+        
+        $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
         $this->options_cache = null;
+        
+        error_log('[RivianTrackr AI Search] sanitize_options() output: ' . print_r($output, true));
+        
         return $output;
     }
 
@@ -290,10 +318,30 @@ class RivianTrackr_AI_Search {
     }
 
     public function register_settings() {
+        static $registered = false;
+        if ($registered) {
+            return;
+        }
+        $registered = true;
+        
+        error_log('[RivianTrackr AI Search] register_settings() executing at ' . current_time('mysql'));
+        
         register_setting(
             'rt_ai_search_group',
             $this->option_name,
-            array( $this, 'sanitize_options' )
+            array(
+                'type' => 'array',
+                'sanitize_callback' => array( $this, 'sanitize_options' ),
+                'default' => array(
+                    'api_key'              => '',
+                    'model'                => 'gpt-4o-mini',
+                    'max_posts'            => 10,
+                    'enable'               => 0,
+                    'max_calls_per_minute' => 30,
+                    'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+                    'custom_css'           => '',
+                )
+            )
         );
 
         add_settings_section(
@@ -358,6 +406,9 @@ class RivianTrackr_AI_Search {
             'rt-ai-search',
             'rt_ai_search_main'
         );
+
+        error_log('[RivianTrackr AI Search] register_settings() completed');
+
     }
 
     public function field_api_key() {
