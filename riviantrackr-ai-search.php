@@ -378,7 +378,18 @@ class RivianTrackr_AI_Search {
         $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
         $this->options_cache = null;
+
+        // DEBUG: Log what we're about to save
+        error_log('[RivianTrackr AI Search] ===== SANITIZE DEBUG =====');
+        error_log('[RivianTrackr AI Search] Input API key: ' . (isset($input['api_key']) ? substr($input['api_key'], 0, 10) . '...' : 'NOT SET'));
+        error_log('[RivianTrackr AI Search] Output API key length: ' . strlen($output['api_key']));
+        error_log('[RivianTrackr AI Search] Output array: ' . print_r($output, true));
+        error_log('[RivianTrackr AI Search] ===== END DEBUG =====');
+
+        $this->options_cache = null;
+
         error_log('[RivianTrackr AI Search] Options saved successfully');
+
         return $output;
     }
 
