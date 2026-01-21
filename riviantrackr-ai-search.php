@@ -378,6 +378,7 @@ class RivianTrackr_AI_Search {
         $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
         $this->options_cache = null;
+        error_log('[RivianTrackr AI Search] Options saved successfully');
         return $output;
     }
 
