@@ -318,14 +318,17 @@ class RivianTrackr_AI_Search {
     }
 
     public function register_settings() {
+        // Prevent multiple registrations
         static $registered = false;
         if ($registered) {
             return;
         }
         $registered = true;
         
+        // Log that registration is happening
         error_log('[RivianTrackr AI Search] register_settings() executing at ' . current_time('mysql'));
         
+        // ALWAYS register the option itself - this is crucial
         register_setting(
             'rt_ai_search_group',
             $this->option_name,
@@ -343,72 +346,75 @@ class RivianTrackr_AI_Search {
                 )
             )
         );
+        
+        // ONLY add settings sections/fields if the function exists (i.e., we're in admin)
+        if (function_exists('add_settings_section')) {
+            
+            add_settings_section(
+                'rt_ai_search_main',
+                'AI Search Settings',
+                '__return_false',
+                'rt-ai-search'
+            );
 
-        add_settings_section(
-            'rt_ai_search_main',
-            'AI Search Settings',
-            '__return_false',
-            'rt-ai-search'
-        );
+            add_settings_field(
+                'api_key',
+                'OpenAI API Key',
+                array( $this, 'field_api_key' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'api_key',
-            'OpenAI API Key',
-            array( $this, 'field_api_key' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
+            add_settings_field(
+                'model',
+                'Model',
+                array( $this, 'field_model' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'model',
-            'Model',
-            array( $this, 'field_model' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
+            add_settings_field(
+                'max_posts',
+                'Maximum posts to send to OpenAI',
+                array( $this, 'field_max_posts' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'max_posts',
-            'Maximum posts to send to OpenAI',
-            array( $this, 'field_max_posts' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
+            add_settings_field(
+                'enable',
+                'Enable AI search summary',
+                array( $this, 'field_enable' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'enable',
-            'Enable AI search summary',
-            array( $this, 'field_enable' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
+            add_settings_field(
+                'max_calls_per_minute',
+                'Max AI calls per minute',
+                array( $this, 'field_max_calls_per_minute' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'max_calls_per_minute',
-            'Max AI calls per minute',
-            array( $this, 'field_max_calls_per_minute' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
+            add_settings_field(
+                'cache_ttl',
+                'AI cache lifetime (seconds)',
+                array( $this, 'field_cache_ttl' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
 
-        add_settings_field(
-            'cache_ttl',
-            'AI cache lifetime (seconds)',
-            array( $this, 'field_cache_ttl' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
-
-        add_settings_field(
-            'custom_css',
-            'Custom CSS',
-            array( $this, 'field_custom_css' ),
-            'rt-ai-search',
-            'rt_ai_search_main'
-        );
-
+            add_settings_field(
+                'custom_css',
+                'Custom CSS',
+                array( $this, 'field_custom_css' ),
+                'rt-ai-search',
+                'rt_ai_search_main'
+            );
+        }
+        
         error_log('[RivianTrackr AI Search] register_settings() completed');
-
     }
 
     public function field_api_key() {
