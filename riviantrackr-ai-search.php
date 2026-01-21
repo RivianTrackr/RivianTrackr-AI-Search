@@ -338,25 +338,32 @@ class RivianTrackr_AI_Search {
     }
 
     public function sanitize_options($input) {
+        // Use a static variable to prevent infinite recursion
+        static $recursion_guard = false;
+        
+        if ($recursion_guard) {
+            error_log('[RivianTrackr AI Search] RECURSION DETECTED - Aborting sanitize');
+            return $input;
+        }
+        
+        $recursion_guard = true;
+        
         $output = array();
 
+        // Handle API key
         if (isset($input['api_key'])) {
             $api_key = trim($input['api_key']);
             
-            // Don't save the placeholder text
-            if ($api_key === '••••••••••••••••••••••••') {
-                // Keep existing key
-                $existing = get_option($this->option_name, array());
-                $output['api_key'] = isset($existing['api_key']) ? $existing['api_key'] : '';
-            } elseif (!empty($api_key)) {
-                $output['api_key'] = $this->encrypt_api_key($api_key);
+            // Check if it's the placeholder (bullets)
+            if ($api_key === '••••••••••••••••••••••••' || empty($api_key)) {
+                // User didn't change it - preserve existing key from input
+                $output['api_key'] = isset($input['api_key_existing']) ? $input['api_key_existing'] : '';
             } else {
-                $output['api_key'] = '';
+                // New key provided - encrypt it
+                $output['api_key'] = $this->encrypt_api_key($api_key);
             }
         } else {
-            // Keep existing key if not provided
-            $existing = get_option($this->option_name, array());
-            $output['api_key'] = isset($existing['api_key']) ? $existing['api_key'] : '';
+            $output['api_key'] = '';
         }
         
         $output['model']     = isset($input['model']) ? sanitize_text_field($input['model']) : 'gpt-4o-mini';
@@ -380,35 +387,11 @@ class RivianTrackr_AI_Search {
         
         $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
-        // DEBUG: Log what we're about to save
-        error_log('[RivianTrackr AI Search] ===== SANITIZE DEBUG =====');
-        error_log('[RivianTrackr AI Search] Input API key: ' . (isset($input['api_key']) ? substr($input['api_key'], 0, 10) . '...' : 'NOT SET'));
-        error_log('[RivianTrackr AI Search] Output API key length: ' . strlen($output['api_key']));
-        error_log('[RivianTrackr AI Search] Output array: ' . print_r($output, true));
-        error_log('[RivianTrackr AI Search] ===== END DEBUG =====');
-
-        // CRITICAL FIX: Force the option to save
-        // WordPress Settings API sometimes doesn't call update_option properly
-        $save_result = update_option($this->option_name, $output);
-        error_log('[RivianTrackr AI Search] Force save result: ' . ($save_result ? 'SUCCESS' : 'FAILED'));
-
-        // If update_option returned false, check if option exists
-        if (!$save_result) {
-            $existing = get_option($this->option_name, 'DOES_NOT_EXIST');
-            if ($existing === 'DOES_NOT_EXIST') {
-                // Option doesn't exist, force add it
-                error_log('[RivianTrackr AI Search] Option does not exist, adding it...');
-                $add_result = add_option($this->option_name, $output, '', 'yes');
-                error_log('[RivianTrackr AI Search] Add option result: ' . ($add_result ? 'SUCCESS' : 'FAILED'));
-            } else {
-                // update_option returns false if the value is the same, which is OK
-                error_log('[RivianTrackr AI Search] update_option returned false, but option exists (value may be unchanged)');
-            }
-        }
-
         $this->options_cache = null;
         
-        error_log('[RivianTrackr AI Search] Options saved successfully');
+        $recursion_guard = false;
+        
+        error_log('[RivianTrackr AI Search] Options sanitized - API key length: ' . strlen($output['api_key']));
         
         return $output;
     }
@@ -524,18 +507,24 @@ class RivianTrackr_AI_Search {
         $display_value = $has_key ? '••••••••••••••••••••••••' : '';
         ?>
         <div class="rt-ai-field-input">
+            <!-- Hidden field to preserve existing key -->
+            <?php if ($has_key) : ?>
+                <input type="hidden" 
+                       name="<?php echo esc_attr($this->option_name); ?>[api_key_existing]"
+                       value="<?php echo esc_attr($options['api_key']); ?>" />
+            <?php endif; ?>
+            
             <input type="password" 
                    id="rt-ai-api-key"
                    name="<?php echo esc_attr($this->option_name); ?>[api_key]"
                    value="<?php echo esc_attr($display_value); ?>"
-                   placeholder="<?php echo $has_key ? 'API key is set (hidden for security)' : 'sk-proj-...'; ?>"
+                   placeholder="<?php echo $has_key ? 'Leave unchanged or paste new key' : 'sk-proj-...'; ?>"
                    autocomplete="off" 
                    spellcheck="false" />
             
             <?php if ($has_key) : ?>
                 <p class="description" style="margin-top: 8px; color: #0a5e2a;">
-                    <strong>✓ API key is set and encrypted.</strong> Leave this field as-is to keep your existing key, 
-                    or paste a new key to replace it.
+                    <strong>✓ API key is set.</strong> Leave blank to keep existing key.
                 </p>
             <?php endif; ?>
         </div>
