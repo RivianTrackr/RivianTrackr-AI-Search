@@ -343,7 +343,9 @@ class RivianTrackr_AI_Search {
         if (isset($input['api_key'])) {
             $api_key = trim($input['api_key']);
             
+            // Don't save the placeholder text
             if ($api_key === '••••••••••••••••••••••••') {
+                // Keep existing key
                 $existing = get_option($this->option_name, array());
                 $output['api_key'] = isset($existing['api_key']) ? $existing['api_key'] : '';
             } elseif (!empty($api_key)) {
@@ -352,6 +354,7 @@ class RivianTrackr_AI_Search {
                 $output['api_key'] = '';
             }
         } else {
+            // Keep existing key if not provided
             $existing = get_option($this->option_name, array());
             $output['api_key'] = isset($existing['api_key']) ? $existing['api_key'] : '';
         }
@@ -377,8 +380,6 @@ class RivianTrackr_AI_Search {
         
         $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
 
-        $this->options_cache = null;
-
         // DEBUG: Log what we're about to save
         error_log('[RivianTrackr AI Search] ===== SANITIZE DEBUG =====');
         error_log('[RivianTrackr AI Search] Input API key: ' . (isset($input['api_key']) ? substr($input['api_key'], 0, 10) . '...' : 'NOT SET'));
@@ -386,10 +387,29 @@ class RivianTrackr_AI_Search {
         error_log('[RivianTrackr AI Search] Output array: ' . print_r($output, true));
         error_log('[RivianTrackr AI Search] ===== END DEBUG =====');
 
+        // CRITICAL FIX: Force the option to save
+        // WordPress Settings API sometimes doesn't call update_option properly
+        $save_result = update_option($this->option_name, $output);
+        error_log('[RivianTrackr AI Search] Force save result: ' . ($save_result ? 'SUCCESS' : 'FAILED'));
+
+        // If update_option returned false, check if option exists
+        if (!$save_result) {
+            $existing = get_option($this->option_name, 'DOES_NOT_EXIST');
+            if ($existing === 'DOES_NOT_EXIST') {
+                // Option doesn't exist, force add it
+                error_log('[RivianTrackr AI Search] Option does not exist, adding it...');
+                $add_result = add_option($this->option_name, $output, '', 'yes');
+                error_log('[RivianTrackr AI Search] Add option result: ' . ($add_result ? 'SUCCESS' : 'FAILED'));
+            } else {
+                // update_option returns false if the value is the same, which is OK
+                error_log('[RivianTrackr AI Search] update_option returned false, but option exists (value may be unchanged)');
+            }
+        }
+
         $this->options_cache = null;
-
+        
         error_log('[RivianTrackr AI Search] Options saved successfully');
-
+        
         return $output;
     }
 
