@@ -358,7 +358,12 @@ class RivianTrackr_AI_Search {
     }
 
     public function sanitize_options($input) {
-        // Use a static variable to prevent infinite recursion
+
+        error_log('[DEBUG] ===== sanitize_options CALLED =====');
+        error_log('[DEBUG] Input keys: ' . print_r(array_keys($input), true));
+        error_log('[DEBUG] Input API key present: ' . (isset($input['api_key']) ? 'YES' : 'NO'));
+        error_log('[DEBUG] Input API key value: ' . (isset($input['api_key']) ? substr($input['api_key'], 0, 20) . '...' : 'N/A'));
+        
         static $recursion_guard = false;
         
         if ($recursion_guard) {
@@ -450,11 +455,18 @@ class RivianTrackr_AI_Search {
     }
 
     public function register_settings() {
+
+        error_log('[DEBUG] register_settings() called');
+        error_log('[DEBUG] Registering option: ' . $this->option_name);
+
         register_setting(
             'rt_ai_search_group',
             $this->option_name,
             array( $this, 'sanitize_options' )
         );
+
+        global $wp_settings_fields;
+        error_log('[DEBUG] Settings registered: ' . print_r($wp_settings_fields, true));
 
         add_settings_section(
             'rt_ai_search_main',
