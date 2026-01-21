@@ -138,15 +138,10 @@ class RivianTrackr_AI_Search {
         );
     }
 
-    private static function get_logs_table_name() {
-        global $wpdb;
-        return $wpdb->prefix . 'rt_ai_search_logs';
-    }
-
     private static function create_logs_table() {
         global $wpdb;
 
-        $table_name      = self::get_logs_table_name();
+        $table_name      = self::get_logs_table_name(); // Should return $wpdb->prefix . 'rt_ai_search_logs'
         $charset_collate = $wpdb->get_charset_collate();
 
         $sql = "CREATE TABLE $table_name (
@@ -164,6 +159,11 @@ class RivianTrackr_AI_Search {
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
+    }
+
+    private static function get_logs_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'rt_ai_search_logs'; // ✅ Uses $wpdb->prefix
     }
 
     private static function add_missing_indexes() {
@@ -208,6 +208,7 @@ class RivianTrackr_AI_Search {
         self::create_logs_table();
         self::add_missing_indexes();
         
+        // Initialize plugin options if they don't exist
         $option_name = 'rt_ai_search_options';
         $existing_options = get_option($option_name);
         
@@ -222,20 +223,23 @@ class RivianTrackr_AI_Search {
                 'custom_css'           => '',
             );
             
+            // add_option() automatically uses the correct prefix
             add_option($option_name, $default_options, '', 'yes');
             error_log('[RivianTrackr AI Search] Plugin options initialized on activation');
         }
         
+        // Initialize cache namespace
         $cache_namespace_option = 'rt_ai_search_cache_namespace';
         if (false === get_option($cache_namespace_option)) {
             add_option($cache_namespace_option, 1, '', 'yes');
-            error_log('[RivianTrackr AI Search] Cache namespace initialized on activation');
+            error_log('[RivianTrackr AI Search] Cache namespace initialized');
         }
         
+        // Initialize models cache
         $models_cache_option = 'rt_ai_search_models_cache';
         if (false === get_option($models_cache_option)) {
             add_option($models_cache_option, array(), '', 'no');
-            error_log('[RivianTrackr AI Search] Models cache initialized on activation');
+            error_log('[RivianTrackr AI Search] Models cache initialized');
         }
     }
 
@@ -322,6 +326,7 @@ class RivianTrackr_AI_Search {
 
         $opts = get_option($this->option_name, array());
         
+        // If get_option returned false (option doesn't exist), create it
         if (false === $opts) {
             add_option($this->option_name, $defaults, '', 'yes');
             $opts = $defaults;
@@ -1220,6 +1225,27 @@ class RivianTrackr_AI_Search {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
+
+        global $wpdb;
+        echo '<div class="notice notice-info">';
+        echo '<h3>Database Configuration Debug</h3>';
+        echo '<p><strong>WordPress table prefix:</strong> ' . $wpdb->prefix . '</p>';
+        echo '<p><strong>Options table:</strong> ' . $wpdb->options . '</p>';
+        echo '<p><strong>Expected option name:</strong> rt_ai_search_options</p>';
+        echo '<p><strong>Full query would be:</strong> SELECT * FROM ' . $wpdb->options . ' WHERE option_name = "rt_ai_search_options"</p>';
+        
+        // Extra checks
+        $option_exists = get_option('rt_ai_search_options', 'DOES_NOT_EXIST');
+        echo '<p><strong>Does option exist (via get_option):</strong> ' . ($option_exists === 'DOES_NOT_EXIST' ? 'NO' : 'YES') . '</p>';
+        
+        // Direct database check
+        $direct_check = $wpdb->get_var($wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            'rt_ai_search_options'
+        ));
+        echo '<p><strong>Direct database check:</strong> ' . ($direct_check ? 'FOUND (length: ' . strlen($direct_check) . ' chars)' : 'NOT FOUND') . '</p>';
+        
+        echo '</div>';
 
         $options           = $this->get_options();
         $cache             = get_option( $this->models_cache_option );
