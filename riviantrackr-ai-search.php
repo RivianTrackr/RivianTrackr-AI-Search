@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.8
+ * Version: 3.3.5
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.8' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.5' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -55,73 +55,6 @@ class RivianTrackr_AI_Search {
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
     }
 
-    private function get_encryption_key() {
-        $key = AUTH_KEY . SECURE_AUTH_KEY . LOGGED_IN_KEY . NONCE_KEY;
-        return hash('sha256', $key, true);
-    }
-
-    private function encrypt_api_key($plaintext) {
-        if (empty($plaintext)) {
-            return '';
-        }
-        
-        $key = $this->get_encryption_key();
-        $iv_length = openssl_cipher_iv_length('aes-256-cbc');
-        $iv = openssl_random_pseudo_bytes($iv_length);
-        
-        $encrypted = openssl_encrypt(
-            $plaintext,
-            'aes-256-cbc',
-            $key,
-            OPENSSL_RAW_DATA,
-            $iv
-        );
-        
-        if ($encrypted === false) {
-            error_log('[RivianTrackr AI Search] Encryption failed');
-            return '';
-        }
-        
-        return base64_encode($iv . $encrypted);
-    }
-
-    private function decrypt_api_key($encrypted) {
-        if (empty($encrypted)) {
-            return '';
-        }
-        
-        if (strpos($encrypted, 'sk-') === 0) {
-            return $encrypted;
-        }
-        
-        $key = $this->get_encryption_key();
-        $data = base64_decode($encrypted);
-        
-        if ($data === false) {
-            error_log('[RivianTrackr AI Search] Base64 decode failed');
-            return '';
-        }
-        
-        $iv_length = openssl_cipher_iv_length('aes-256-cbc');
-        $iv = substr($data, 0, $iv_length);
-        $encrypted_data = substr($data, $iv_length);
-        
-        $decrypted = openssl_decrypt(
-            $encrypted_data,
-            'aes-256-cbc',
-            $key,
-            OPENSSL_RAW_DATA,
-            $iv
-        );
-        
-        if ($decrypted === false) {
-            error_log('[RivianTrackr AI Search] Decryption failed');
-            return '';
-        }
-        
-        return $decrypted;
-    }
-
     public function add_plugin_settings_link( $links ) {
         $url = admin_url( 'admin.php?page=rt-ai-search-settings' );
         $settings_link = '<a href="' . esc_url( $url ) . '">Settings</a>';
@@ -138,10 +71,15 @@ class RivianTrackr_AI_Search {
         );
     }
 
+    private static function get_logs_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'rt_ai_search_logs';
+    }
+
     private static function create_logs_table() {
         global $wpdb;
 
-        $table_name      = self::get_logs_table_name(); // Should return $wpdb->prefix . 'rt_ai_search_logs'
+        $table_name      = self::get_logs_table_name();
         $charset_collate = $wpdb->get_charset_collate();
 
         $sql = "CREATE TABLE $table_name (
@@ -159,11 +97,6 @@ class RivianTrackr_AI_Search {
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
-    }
-
-    private static function get_logs_table_name() {
-        global $wpdb;
-        return $wpdb->prefix . 'rt_ai_search_logs'; // ✅ Uses $wpdb->prefix
     }
 
     private static function add_missing_indexes() {
@@ -206,47 +139,7 @@ class RivianTrackr_AI_Search {
 
     public static function activate() {
         self::create_logs_table();
-        self::add_missing_indexes();
-        
-        // Initialize plugin options if they don't exist
-        $option_name = 'rt_ai_search_options';
-        
-        // CHANGE THIS LINE - use a unique string instead of checking false
-        $existing_options = get_option($option_name, 'DOES_NOT_EXIST');
-        
-        // CHANGE THIS CONDITION
-        if ($existing_options === 'DOES_NOT_EXIST') {
-            $default_options = array(
-                'api_key'              => '',
-                'model'                => 'gpt-4o-mini',
-                'max_posts'            => 10,
-                'enable'               => 0,
-                'max_calls_per_minute' => 30,
-                'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
-                'custom_css'           => '',
-            );
-            
-            $result = add_option($option_name, $default_options, '', 'yes');
-            error_log('[RivianTrackr AI Search] Activation - add_option result: ' . ($result ? 'SUCCESS' : 'FAILED'));
-            
-            // Verify it was created
-            $verify = get_option($option_name, 'STILL_MISSING');
-            error_log('[RivianTrackr AI Search] Activation - verification: ' . ($verify === 'STILL_MISSING' ? 'FAILED' : 'SUCCESS'));
-        } else {
-            error_log('[RivianTrackr AI Search] Activation - options already exist');
-        }
-        
-        // Initialize cache namespace
-        $cache_namespace_option = 'rt_ai_search_cache_namespace';
-        if (get_option($cache_namespace_option, 'DOES_NOT_EXIST') === 'DOES_NOT_EXIST') {
-            add_option($cache_namespace_option, 1, '', 'yes');
-        }
-        
-        // Initialize models cache
-        $models_cache_option = 'rt_ai_search_models_cache';
-        if (get_option($models_cache_option, 'DOES_NOT_EXIST') === 'DOES_NOT_EXIST') {
-            add_option($models_cache_option, array(), '', 'no');
-        }
+        self::add_missing_indexes(); // Add indexes to existing tables
     }
 
     private function ensure_logs_table() {
@@ -316,7 +209,7 @@ class RivianTrackr_AI_Search {
     }
 
     public function get_options() {
-        if (is_array($this->options_cache)) {
+        if ( is_array( $this->options_cache ) ) {
             return $this->options_cache;
         }
 
@@ -330,94 +223,36 @@ class RivianTrackr_AI_Search {
             'custom_css'           => '',
         );
 
-        // IMPORTANT: Use a unique string (not array) as default to detect non-existence
-        $opts = get_option($this->option_name, 'OPTION_DOES_NOT_EXIST');
-        
-        // Check if option doesn't exist
-        if ($opts === 'OPTION_DOES_NOT_EXIST') {
-            // Option doesn't exist - create it
-            error_log('[RivianTrackr AI Search] Option does not exist, creating it now');
-            $result = add_option($this->option_name, $defaults, '', 'yes');
-            error_log('[RivianTrackr AI Search] add_option result: ' . ($result ? 'SUCCESS' : 'FAILED'));
-            
-            $opts = $defaults;
-        } elseif (!is_array($opts)) {
-            // Option exists but has wrong format
-            error_log('[RivianTrackr AI Search] Option exists but is not an array, resetting');
-            update_option($this->option_name, $defaults);
-            $opts = $defaults;
-        }
-        
-        $this->options_cache = wp_parse_args($opts, $defaults);
-        
-        if (!empty($this->options_cache['api_key'])) {
-            $this->options_cache['api_key'] = $this->decrypt_api_key($this->options_cache['api_key']);
-        }
+        $opts = get_option( $this->option_name, array() );
+        $this->options_cache = wp_parse_args( is_array( $opts ) ? $opts : array(), $defaults );
 
         return $this->options_cache;
     }
 
-    public function sanitize_options($input) {
-
-        error_log('[DEBUG] ===== sanitize_options CALLED =====');
-        error_log('[DEBUG] Input keys: ' . print_r(array_keys($input), true));
-        error_log('[DEBUG] Input API key present: ' . (isset($input['api_key']) ? 'YES' : 'NO'));
-        error_log('[DEBUG] Input API key value: ' . (isset($input['api_key']) ? substr($input['api_key'], 0, 20) . '...' : 'N/A'));
-        
-        static $recursion_guard = false;
-        
-        if ($recursion_guard) {
-            error_log('[RivianTrackr AI Search] RECURSION DETECTED - Aborting sanitize');
-            return $input;
-        }
-        
-        $recursion_guard = true;
-        
+    public function sanitize_options( $input ) {
         $output = array();
 
-        // Handle API key
-        if (isset($input['api_key'])) {
-            $api_key = trim($input['api_key']);
-            
-            // Check if it's the placeholder (bullets)
-            if ($api_key === '••••••••••••••••••••••••' || empty($api_key)) {
-                // User didn't change it - preserve existing key from input
-                $output['api_key'] = isset($input['api_key_existing']) ? $input['api_key_existing'] : '';
-            } else {
-                // New key provided - encrypt it
-                $output['api_key'] = $this->encrypt_api_key($api_key);
-            }
-        } else {
-            $output['api_key'] = '';
-        }
-        
-        $output['model']     = isset($input['model']) ? sanitize_text_field($input['model']) : 'gpt-4o-mini';
-        $output['max_posts'] = isset($input['max_posts']) ? max(1, intval($input['max_posts'])) : 10;
-        $output['enable']    = !empty($input['enable']) ? 1 : 0;
-        $output['max_calls_per_minute'] = isset($input['max_calls_per_minute'])
-            ? max(0, intval($input['max_calls_per_minute']))
+        $output['api_key']   = isset( $input['api_key'] ) ? trim( $input['api_key'] ) : '';
+        $output['model']     = isset( $input['model'] ) ? sanitize_text_field( $input['model'] ) : 'gpt-4o-mini';  // Updated default
+        $output['max_posts'] = isset( $input['max_posts'] ) ? max( 1, intval( $input['max_posts'] ) ) : 10;
+        $output['enable']    = ! empty( $input['enable'] ) ? 1 : 0;
+        $output['max_calls_per_minute'] = isset( $input['max_calls_per_minute'] )
+            ? max( 0, intval( $input['max_calls_per_minute'] ) )
             : 30;
-        
-        if (isset($input['cache_ttl'])) {
-            $ttl = intval($input['cache_ttl']);
-            if ($ttl < RT_AI_SEARCH_MIN_CACHE_TTL) {
+        if ( isset( $input['cache_ttl'] ) ) {
+            $ttl = intval( $input['cache_ttl'] );
+            if ( $ttl < RT_AI_SEARCH_MIN_CACHE_TTL ) {
                 $ttl = RT_AI_SEARCH_MIN_CACHE_TTL;
-            } elseif ($ttl > RT_AI_SEARCH_MAX_CACHE_TTL) {
+            } elseif ( $ttl > RT_AI_SEARCH_MAX_CACHE_TTL ) {
                 $ttl = RT_AI_SEARCH_MAX_CACHE_TTL;
             }
             $output['cache_ttl'] = $ttl;
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
-        
-        $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
+        $output['custom_css'] = isset( $input['custom_css'] ) ? wp_strip_all_tags( $input['custom_css'] ) : '';
 
         $this->options_cache = null;
-        
-        $recursion_guard = false;
-        
-        error_log('[RivianTrackr AI Search] Options sanitized - API key length: ' . strlen($output['api_key']));
-        
         return $output;
     }
 
@@ -455,18 +290,11 @@ class RivianTrackr_AI_Search {
     }
 
     public function register_settings() {
-
-        error_log('[DEBUG] register_settings() called');
-        error_log('[DEBUG] Registering option: ' . $this->option_name);
-
         register_setting(
             'rt_ai_search_group',
             $this->option_name,
             array( $this, 'sanitize_options' )
         );
-
-        global $wp_settings_fields;
-        error_log('[DEBUG] Settings registered: ' . print_r($wp_settings_fields, true));
 
         add_settings_section(
             'rt_ai_search_main',
@@ -534,90 +362,47 @@ class RivianTrackr_AI_Search {
 
     public function field_api_key() {
         $options = $this->get_options();
-        $has_key = !empty($options['api_key']);
-        
-        $display_value = $has_key ? '••••••••••••••••••••••••' : '';
         ?>
         <div class="rt-ai-field-input">
-            <!-- Hidden field to preserve existing key -->
-            <?php if ($has_key) : ?>
-                <input type="hidden" 
-                       name="<?php echo esc_attr($this->option_name); ?>[api_key_existing]"
-                       value="<?php echo esc_attr($options['api_key']); ?>" />
-            <?php endif; ?>
-            
             <input type="password" 
                    id="rt-ai-api-key"
-                   name="<?php echo esc_attr($this->option_name); ?>[api_key]"
-                   value="<?php echo esc_attr($display_value); ?>"
-                   placeholder="<?php echo $has_key ? 'Leave unchanged or paste new key' : 'sk-proj-...'; ?>"
-                   autocomplete="off" 
-                   spellcheck="false" />
-            
-            <?php if ($has_key) : ?>
-                <p class="description" style="margin-top: 8px; color: #0a5e2a;">
-                    <strong>✓ API key is set.</strong> Leave blank to keep existing key.
-                </p>
-            <?php endif; ?>
+                   name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                   value="<?php echo esc_attr( $options['api_key'] ); ?>"
+                   placeholder="sk-proj-..." 
+                   autocomplete="off" />
         </div>
         
         <div class="rt-ai-field-actions">
             <button type="button" 
                     id="rt-ai-test-key-btn" 
-                    class="rt-ai-button rt-ai-button-secondary">
+                    class="button">
                 Test Connection
             </button>
-            
-            <?php if ($has_key) : ?>
-                <button type="button" 
-                        id="rt-ai-remove-key-btn" 
-                        class="rt-ai-button rt-ai-button-secondary"
-                        style="color: #d63638; border-color: #d63638;">
-                    Remove API Key
-                </button>
-            <?php endif; ?>
         </div>
         
         <div id="rt-ai-test-result"></div>
         
         <p class="description">
-            Create an API key in the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI dashboard</a> and paste it here. 
+            Create an API key in the OpenAI dashboard and paste it here. 
             Use the "Test Connection" button to verify it works.
-            <br>
-            <strong>🔒 Your API key is encrypted before being stored in the database.</strong>
         </p>
         
         <script>
         (function($) {
             $(document).ready(function() {
                 var btn = $('#rt-ai-test-key-btn');
-                var removeBtn = $('#rt-ai-remove-key-btn');
                 var apiKeyInput = $('#rt-ai-api-key');
                 var resultDiv = $('#rt-ai-test-result');
-                var hasExistingKey = <?php echo $has_key ? 'true' : 'false'; ?>;
-                var fieldTouched = false;
-                
-                apiKeyInput.on('input', function() {
-                    fieldTouched = true;
-                });
                 
                 btn.on('click', function() {
                     var apiKey = apiKeyInput.val().trim();
-                    
-                    if (hasExistingKey && !fieldTouched && apiKey.indexOf('•') === 0) {
-                        apiKey = 'USE_EXISTING'; // Signal to use stored key
-                    }
                     
                     if (!apiKey) {
                         resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
                         return;
                     }
                     
-                    if (apiKey.indexOf('•') === 0 && fieldTouched) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter a valid API key.</p></div>');
-                        return;
-                    }
-                    
+                    // Disable button and show loading
                     btn.prop('disabled', true).text('Testing...');
                     resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
                     
@@ -627,7 +412,7 @@ class RivianTrackr_AI_Search {
                         data: {
                             action: 'rt_ai_test_api_key',
                             api_key: apiKey,
-                            nonce: '<?php echo wp_create_nonce('rt_ai_test_key'); ?>'
+                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
                         },
                         success: function(response) {
                             btn.prop('disabled', false).text('Test Connection');
@@ -648,30 +433,6 @@ class RivianTrackr_AI_Search {
                             resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
                         }
                     });
-                });
-                
-                removeBtn.on('click', function() {
-                    if (confirm('Are you sure you want to remove your API key? This will disable AI search until you add a new key.')) {
-                        apiKeyInput.val('');
-                        apiKeyInput.attr('placeholder', 'sk-proj-...');
-                        removeBtn.remove();
-                        hasExistingKey = false;
-                        fieldTouched = true;
-                        resultDiv.html('<div class="rt-ai-test-result info"><p><strong>API key will be removed when you save settings.</strong> Don\'t forget to click "Save Settings" below.</p></div>');
-                        
-                        apiKeyInput.next('.description').remove();
-                    }
-                });
-                
-                apiKeyInput.on('focus', function() {
-                    if ($(this).val().indexOf('•') === 0) {
-                        $(this).val('');
-                        $(this).attr('placeholder', 'Paste new API key here to replace existing key');
-                    }
-                });
-                
-                apiKeyInput.on('paste', function() {
-                    fieldTouched = true;
                 });
             });
         })(jQuery);
@@ -761,31 +522,26 @@ class RivianTrackr_AI_Search {
     }
 
     public function ajax_test_api_key() {
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permission denied.'));
+        // Check permissions
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission denied.' ) );
         }
 
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'rt_ai_test_key')) {
-            wp_send_json_error(array('message' => 'Invalid nonce.'));
+        // Verify nonce
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_test_key' ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid nonce.' ) );
         }
 
-        $api_key = isset($_POST['api_key']) ? trim($_POST['api_key']) : '';
-        
-        if ($api_key === 'USE_EXISTING') {
-            $options = $this->get_options();
-            $api_key = $options['api_key'];
-            
-            if (empty($api_key)) {
-                wp_send_json_error(array('message' => 'No API key is currently stored.'));
-            }
-        }
+        // Get API key from POST
+        $api_key = isset( $_POST['api_key'] ) ? trim( $_POST['api_key'] ) : '';
 
-        $result = $this->test_api_key($api_key);
+        // Test the key
+        $result = $this->test_api_key( $api_key );
 
-        if ($result['success']) {
-            wp_send_json_success($result);
+        if ( $result['success'] ) {
+            wp_send_json_success( $result );
         } else {
-            wp_send_json_error($result);
+            wp_send_json_error( $result );
         }
     }
 
@@ -898,10 +654,10 @@ class RivianTrackr_AI_Search {
         </p>
         
         <div class="rt-ai-css-buttons">
-            <button type="button" id="rt-ai-reset-css" class="button">
-                Reset to Defaults
+            <button type="button" id="rt-ai-reset-css" class="rt-ai-button rt-ai-button-secondary">
+                Reset to Empty
             </button>
-            <button type="button" id="rt-ai-view-default-css" class="button">
+            <button type="button" id="rt-ai-view-default-css" class="rt-ai-button rt-ai-button-secondary">
                 View Default CSS
             </button>
         </div>
@@ -927,27 +683,24 @@ class RivianTrackr_AI_Search {
                 
                 // Reset CSS
                 $('#rt-ai-reset-css').on('click', function() {
-                    if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
+                    if (confirm('Reset custom CSS? This will clear all your custom styles.')) {
                         textarea.val('');
                     }
                 });
                 
                 // View default CSS
                 $('#rt-ai-view-default-css').on('click', function() {
-                    console.log('Opening modal...'); // Debug log
                     modal.addClass('rt-ai-modal-open');
                 });
                 
                 // Close modal - X button
                 $('#rt-ai-close-modal').on('click', function() {
-                    console.log('Closing modal via X...'); // Debug log
                     modal.removeClass('rt-ai-modal-open');
                 });
                 
                 // Close on background click
                 modal.on('click', function(e) {
                     if (e.target === this) {
-                        console.log('Closing modal via background...'); // Debug log
                         modal.removeClass('rt-ai-modal-open');
                     }
                 });
@@ -955,7 +708,6 @@ class RivianTrackr_AI_Search {
                 // Close on ESC key
                 $(document).on('keydown', function(e) {
                     if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
-                        console.log('Closing modal via ESC...'); // Debug log
                         modal.removeClass('rt-ai-modal-open');
                     }
                 });
@@ -963,7 +715,7 @@ class RivianTrackr_AI_Search {
         })(jQuery);
         </script>
         <?php
-    } 
+    }
 
     private function get_default_css() {
         return '@keyframes rt-ai-spin {
@@ -1256,27 +1008,6 @@ class RivianTrackr_AI_Search {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
-
-        global $wpdb;
-        echo '<div class="notice notice-info">';
-        echo '<h3>Database Configuration Debug</h3>';
-        echo '<p><strong>WordPress table prefix:</strong> ' . $wpdb->prefix . '</p>';
-        echo '<p><strong>Options table:</strong> ' . $wpdb->options . '</p>';
-        echo '<p><strong>Expected option name:</strong> rt_ai_search_options</p>';
-        echo '<p><strong>Full query would be:</strong> SELECT * FROM ' . $wpdb->options . ' WHERE option_name = "rt_ai_search_options"</p>';
-        
-        // Extra checks
-        $option_exists = get_option('rt_ai_search_options', 'DOES_NOT_EXIST');
-        echo '<p><strong>Does option exist (via get_option):</strong> ' . ($option_exists === 'DOES_NOT_EXIST' ? 'NO' : 'YES') . '</p>';
-        
-        // Direct database check
-        $direct_check = $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
-            'rt_ai_search_options'
-        ));
-        echo '<p><strong>Direct database check:</strong> ' . ($direct_check ? 'FOUND (length: ' . strlen($direct_check) . ' chars)' : 'NOT FOUND') . '</p>';
-        
-        echo '</div>';
 
         $options           = $this->get_options();
         $cache             = get_option( $this->models_cache_option );
