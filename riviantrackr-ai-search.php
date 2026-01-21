@@ -898,10 +898,10 @@ class RivianTrackr_AI_Search {
         </p>
         
         <div class="rt-ai-css-buttons">
-            <button type="button" id="rt-ai-reset-css" class="rt-ai-button rt-ai-button-secondary">
-                Reset to Empty
+            <button type="button" id="rt-ai-reset-css" class="button">
+                Reset to Defaults
             </button>
-            <button type="button" id="rt-ai-view-default-css" class="rt-ai-button rt-ai-button-secondary">
+            <button type="button" id="rt-ai-view-default-css" class="button">
                 View Default CSS
             </button>
         </div>
@@ -927,24 +927,27 @@ class RivianTrackr_AI_Search {
                 
                 // Reset CSS
                 $('#rt-ai-reset-css').on('click', function() {
-                    if (confirm('Reset custom CSS? This will clear all your custom styles.')) {
+                    if (confirm('Reset custom CSS to defaults? This will clear all your custom styles.')) {
                         textarea.val('');
                     }
                 });
                 
                 // View default CSS
                 $('#rt-ai-view-default-css').on('click', function() {
+                    console.log('Opening modal...'); // Debug log
                     modal.addClass('rt-ai-modal-open');
                 });
                 
                 // Close modal - X button
                 $('#rt-ai-close-modal').on('click', function() {
+                    console.log('Closing modal via X...'); // Debug log
                     modal.removeClass('rt-ai-modal-open');
                 });
                 
                 // Close on background click
                 modal.on('click', function(e) {
                     if (e.target === this) {
+                        console.log('Closing modal via background...'); // Debug log
                         modal.removeClass('rt-ai-modal-open');
                     }
                 });
@@ -952,6 +955,7 @@ class RivianTrackr_AI_Search {
                 // Close on ESC key
                 $(document).on('keydown', function(e) {
                     if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
+                        console.log('Closing modal via ESC...'); // Debug log
                         modal.removeClass('rt-ai-modal-open');
                     }
                 });
@@ -959,7 +963,7 @@ class RivianTrackr_AI_Search {
         })(jQuery);
         </script>
         <?php
-    }
+    } 
 
     private function get_default_css() {
         return '@keyframes rt-ai-spin {
