@@ -2207,6 +2207,11 @@ class RivianTrackr_AI_Search {
         }
         $done = true;
 
+        $paged = get_query_var( 'paged' ) ? get_query_var( 'paged' ) : 1;
+        if ( $paged > 1 ) {
+            return;
+        }
+
         $search_query = get_search_query();
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
