@@ -121,20 +121,17 @@ class RivianTrackr_AI_Search {
         global $wpdb;
         $table_name = self::get_logs_table_name();
 
-        // Check if table exists
         $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
         if ( $table_exists !== $table_name ) {
             return false;
         }
 
-        // Get existing indexes
         $indexes = $wpdb->get_results( "SHOW INDEX FROM $table_name" );
         $index_names = array();
         foreach ( $indexes as $index ) {
             $index_names[] = $index->Key_name;
         }
 
-        // Add search_query_created index if missing
         if ( ! in_array( 'search_query_created', $index_names, true ) ) {
             $wpdb->query( 
                 "ALTER TABLE $table_name 
@@ -143,7 +140,6 @@ class RivianTrackr_AI_Search {
             error_log( '[RivianTrackr AI Search] Added search_query_created index' );
         }
 
-        // Add ai_success_created index if missing
         if ( ! in_array( 'ai_success_created', $index_names, true ) ) {
             $wpdb->query(
                 "ALTER TABLE $table_name 
@@ -157,12 +153,12 @@ class RivianTrackr_AI_Search {
 
     public static function activate() {
         self::create_logs_table();
-        self::add_missing_indexes(); // Add indexes to existing tables
+        self::add_missing_indexes();
     }
 
     private function ensure_logs_table() {
         self::create_logs_table();
-        self::add_missing_indexes(); // Ensure indexes exist
+        self::add_missing_indexes();
         $this->logs_table_checked = false;
         return $this->logs_table_is_available();
     }
@@ -177,8 +173,6 @@ class RivianTrackr_AI_Search {
 
         $result = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
 
-        // Do not attempt to create or repair tables during normal requests.
-        // Table creation is handled on plugin activation and via the explicit admin action.
         $this->logs_table_checked = true;
         $this->logs_table_exists  = ( $result === $table_name );
 
@@ -232,9 +226,9 @@ class RivianTrackr_AI_Search {
         }
 
         $defaults = array(
-            'provider'             => 'openai',  // NEW: Add this line
+            'provider'             => 'openai',
             'api_key'              => '',
-            'model'                => 'gpt-4o-mini',
+            'model'                => '',
             'max_posts'            => 10,
             'enable'               => 0,
             'max_calls_per_minute' => 30,
@@ -258,10 +252,8 @@ class RivianTrackr_AI_Search {
         
         $output = array();
 
-        // NEW: Sanitize provider selection
         $output['provider'] = isset($input['provider']) ? sanitize_text_field($input['provider']) : 'openai';
         
-        // Validate provider
         if ( ! RT_AI_Provider_Factory::is_valid_provider( $output['provider'] ) ) {
             $output['provider'] = 'openai';
         }
@@ -454,11 +446,6 @@ class RivianTrackr_AI_Search {
         
         <div id="rt-ai-test-result"></div>
         
-        <p class="description">
-            Create an API key in the OpenAI dashboard and paste it here. 
-            Use the "Test Connection" button to verify it works.
-        </p>
-        
         <script>
         (function($) {
             $(document).ready(function() {
@@ -570,10 +557,8 @@ class RivianTrackr_AI_Search {
             );
         }
 
-        // Count available models
         $model_count = isset( $data['data'] ) ? count( $data['data'] ) : 0;
         
-        // Check for chat models specifically
         $chat_models = array();
         if ( isset( $data['data'] ) && is_array( $data['data'] ) ) {
             foreach ( $data['data'] as $model ) {
@@ -671,18 +656,6 @@ class RivianTrackr_AI_Search {
             <?php
             $provider_name = RT_AI_Provider_Factory::get_provider_name( $provider_id );
             echo 'Select a model from ' . esc_html( $provider_name ) . '. ';
-            
-            switch ( $provider_id ) {
-                case 'openai':
-                    echo '<strong>Recommended: gpt-4o-mini</strong> (fastest & cheapest)';
-                    break;
-                case 'gemini':
-                    echo '<strong>Recommended: gemini-1.5-flash</strong> (fast & efficient)';
-                    break;
-                case 'claude':
-                    echo '<strong>Recommended: claude-3-5-haiku-20241022</strong> (fast & cost-effective)';
-                    break;
-            }
             ?>
         </p>
         <?php
@@ -695,7 +668,7 @@ class RivianTrackr_AI_Search {
                value="<?php echo esc_attr( $options['max_posts'] ); ?>"
                min="1" max="20" />
         <p class="description">
-            How many posts or pages to pass as context for each search. Default: 10. 
+            How many posts or pages to pass as context for each search. Default: 20. 
             More posts provide better context but increase API costs slightly.
         </p>
         <?php
@@ -746,11 +719,8 @@ class RivianTrackr_AI_Search {
                 name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
                 id="rt-ai-custom-css"
                 class="rt-ai-css-editor"
-                rows="15"
-                placeholder="/* Add your custom CSS here */
-    .rt-ai-search-summary {
-        /* Your custom styles */
-    }"><?php echo esc_textarea( $custom_css ); ?></textarea>
+                rows="15">
+                <?php echo esc_textarea( $custom_css ); ?></textarea>
         </div>
         
         <p class="description">
@@ -1220,18 +1190,6 @@ class RivianTrackr_AI_Search {
                         <div class="rt-ai-field">
                             <div class="rt-ai-field-label">
                                 <label>AI Model</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                <?php
-                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                                $recommendations = array(
-                                    'openai' => 'Recommended: <strong>gpt-4o-mini</strong> (fastest & most cost-effective)',
-                                    'gemini' => 'Recommended: <strong>gemini-1.5-flash</strong> (best balance of speed & cost)',
-                                    'claude' => 'Recommended: <strong>claude-3-5-haiku-20241022</strong> (fast & affordable)'
-                                );
-                                $recommendation = isset( $recommendations[$provider_id] ) ? $recommendations[$provider_id] : 'Choose a model below';
-                                echo $recommendation;
-                                ?>
                             </div>
                             <div class="rt-ai-field-input">
                                 <?php
