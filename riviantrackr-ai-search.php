@@ -1279,7 +1279,8 @@ class RivianTrackr_AI_Search {
                             </div>
                             <div class="rt-ai-field-input">
                                 <?php
-                                $models = $this->get_available_models_for_dropdown( $options['api_key'] );
+                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                                $models = $this->get_available_models_for_dropdown( $provider_id, $options['api_key'] );
                                 if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
                                     $models[] = $options['model'];
                                 }
