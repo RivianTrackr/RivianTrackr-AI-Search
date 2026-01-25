@@ -3,7 +3,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
- * Description: Add AI-powered search summaries to WordPress search results using OpenAI (ChatGPT), Google Gemini, or Anthropic Claude. Generates intelligent summaries without delaying search results, with built-in caching, rate limiting, and analytics. Choose your preferred AI provider and model for optimal performance and cost.
+ * Description: Add AI-powered search summaries using OpenAI, Gemini, or Claude. Fast, cached, and analytics-enabled for optimal performance.
  * Version: 4.0.0
  * Author URI: https://riviantrackr.com
  * Author: Jose Castillo
