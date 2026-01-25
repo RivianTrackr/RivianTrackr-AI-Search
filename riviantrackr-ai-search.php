@@ -594,9 +594,6 @@ class RivianTrackr_AI_Search {
         );
     }
 
-    /**
-     * Render AI provider selection field
-     */
     public function field_provider() {
         $options = $this->get_options();
         $providers = RT_AI_Provider_Factory::get_available_providers();
@@ -613,18 +610,9 @@ class RivianTrackr_AI_Search {
                 <?php endforeach; ?>
             </select>
         </div>
-        
-        <p class="description">
-            Choose your AI provider. Each has different models, pricing, and strengths.
-            <br><strong>OpenAI (ChatGPT):</strong> Industry standard, most reliable
-            <br><strong>Google Gemini:</strong> Best price-to-performance ratio
-            <br><strong>Anthropic Claude:</strong> Superior reasoning capabilities
-        </p>
-        
         <script>
         jQuery(document).ready(function($) {
             $('#rt-ai-provider-select').on('change', function() {
-                // Show alert when provider changes
                 var providerName = $(this).find('option:selected').text();
                 alert('Provider changed to ' + providerName + '. Please save your settings to see available models for this provider.');
             });
