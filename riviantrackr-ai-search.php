@@ -856,8 +856,262 @@ class RivianTrackr_AI_Search {
         $has_api_key = ! empty( $options['api_key'] );
         $is_enabled = ! empty( $options['enable'] );
         $setup_complete = $has_api_key && $is_enabled;
+        ?>
         
-        require_once plugin_dir_path( __FILE__ ) . 'templates/settings-page.php';
+        <div class="rt-ai-settings-wrap">
+            <div class="rt-ai-header">
+                <h1>AI Search Settings</h1>
+                <p>Configure AI-powered search summaries for your site using OpenAI, Google Gemini, or Anthropic Claude.</p>
+            </div>
+
+            <div class="rt-ai-status-card <?php echo $setup_complete ? 'active' : ''; ?>">
+                <div class="rt-ai-status-icon">
+                    <?php echo $setup_complete ? '✓' : '○'; ?>
+                </div>
+                <div class="rt-ai-status-content">
+                    <h3><?php echo $setup_complete ? 'AI Search Active' : 'Setup Required'; ?></h3>
+                    <p>
+                        <?php 
+                        if ( $setup_complete ) {
+                            $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                            $provider_names = array(
+                                'openai' => 'OpenAI',
+                                'gemini' => 'Google Gemini',
+                                'claude' => 'Anthropic Claude'
+                            );
+                            $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'AI provider';
+                            echo 'Your AI search is configured and running with ' . esc_html( $display_name ) . '.';
+                        } elseif ( ! $has_api_key ) {
+                            echo 'Add your API key to get started.';
+                        } else {
+                            echo 'Enable AI search to start generating summaries.';
+                        }
+                        ?>
+                    </p>
+                </div>
+            </div>
+
+            <?php if ( $refreshed ) : ?>
+                <?php
+                $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                $provider_names = array(
+                    'openai' => 'OpenAI',
+                    'gemini' => 'Google Gemini',
+                    'claude' => 'Anthropic Claude'
+                );
+                $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'the provider';
+                ?>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    Model list refreshed from <?php echo esc_html( $display_name ); ?>.
+                </div>
+            <?php elseif ( ! empty( $error ) ) : ?>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <?php echo esc_html( $error ); ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ( $cache_cleared && empty( $cache_clear_error ) ) : ?>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    AI summary cache cleared. New searches will fetch fresh answers.
+                </div>
+            <?php elseif ( ! empty( $cache_clear_error ) ) : ?>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <?php echo esc_html( $cache_clear_error ); ?>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" action="options.php">
+                <?php settings_fields( 'rt_ai_search_group' ); ?>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Getting Started</h2>
+                        <p>Essential settings to enable AI search</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>AI Search</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Enable or disable AI-powered search summaries site-wide
+                            </div>
+                            <div class="rt-ai-toggle-wrapper">
+                                <label class="rt-ai-toggle">
+                                    <input type="checkbox" 
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
+                                           value="1" 
+                                           <?php checked( $options['enable'], 1 ); ?> />
+                                    <span class="rt-ai-toggle-slider"></span>
+                                </label>
+                                <span class="rt-ai-toggle-label">
+                                    <?php echo $options['enable'] ? 'Enabled' : 'Disabled'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>AI Provider</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Choose your AI provider. Each has different models, pricing, and strengths.
+                            </div>
+                            <?php $this->field_provider(); ?>
+                        </div>
+
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label for="rt-ai-api-key">API Key</label>
+                                <span class="rt-ai-field-required">Required</span>
+                            </div>
+                            <?php $this->field_api_key(); ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>AI Configuration</h2>
+                        <p>Customize how AI generates search summaries</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>AI Model</label>
+                            </div>
+                            <?php $this->field_model(); ?>
+                            <div class="rt-ai-field-actions">
+                                <a href="<?php echo esc_url( $refresh_url ); ?>" 
+                                   class="rt-ai-button rt-ai-button-secondary">
+                                    Refresh Models
+                                </a>
+                            </div>
+                            <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
+                                <div style="margin-top: 8px; font-size: 13px; color: #86868b;">
+                                    Last updated: <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), intval( $cache['updated_at'] ) ) ); ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Context Size</label>
+                            </div>
+                            <?php $this->field_max_posts(); ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Performance</h2>
+                        <p>Control rate limits and caching behavior</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Cache Duration</label>
+                            </div>
+                            <?php $this->field_cache_ttl(); ?>
+                            <div class="rt-ai-field-actions">
+                                <a href="<?php echo esc_url( $clear_cache_url ); ?>" 
+                                   class="rt-ai-button rt-ai-button-secondary">
+                                    Clear Cache Now
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Rate Limit</label>
+                            </div>
+                            <?php $this->field_max_calls_per_minute(); ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Appearance</h2>
+                        <p>Customize how the AI search summary looks on your site</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Custom CSS</label>
+                            </div>
+                            <?php $this->field_custom_css(); ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rt-ai-footer-actions">
+                    <?php submit_button( 'Save Settings', 'primary rt-ai-button rt-ai-button-primary', 'submit', false ); ?>
+                </div>
+            </form>
+        </div>
+
+        <script>
+        (function($) {
+            $(document).ready(function() {
+                $('#rt-ai-provider-select').on('change', function() {
+                    var providerName = $(this).find('option:selected').text();
+                    var message = 'Provider changed to ' + providerName + '.\n\n';
+                    message += 'Please save your settings to:\n';
+                    message += '• Update the API key link\n';
+                    message += '• Load models for this provider\n';
+                    message += '• Update recommendations';
+                    
+                    alert(message);
+                });
+                
+                $('#rt-ai-test-key-btn').on('click', function() {
+                    var btn = $(this);
+                    var apiKey = $('#rt-ai-api-key').val().trim();
+                    var resultDiv = $('#rt-ai-test-result');
+                    
+                    if (!apiKey) {
+                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
+                        return;
+                    }
+                    
+                    btn.prop('disabled', true).text('Testing...');
+                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_test_api_key',
+                            api_key: apiKey,
+                            provider: $('#rt-ai-provider-select').val(),
+                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
+                        },
+                        success: function(response) {
+                            btn.prop('disabled', false).text('Test Connection');
+                            
+                            if (response.success) {
+                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
+                                if (response.data.model_count) {
+                                    msg += '<br>Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')';
+                                }
+                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
+                            } else {
+                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Test Connection');
+                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
+                        }
+                    });
+                });
+            });
+        })(jQuery);
+        </script>
+
+        <?php
     }
 
     public function render_analytics_page() {
@@ -884,8 +1138,287 @@ class RivianTrackr_AI_Search {
             admin_url( 'admin.php?page=rt-ai-search-analytics&rt_ai_build_logs=1' ),
             'rt_ai_build_logs'
         );
+        ?>
         
-        require_once plugin_dir_path( __FILE__ ) . 'templates/analytics-page.php';
+        <div class="rt-ai-settings-wrap">
+            <div class="rt-ai-header">
+                <h1>Analytics</h1>
+                <p>Track AI search usage, success rates, and identify trends.</p>
+            </div>
+
+            <?php if ( $logs_built && empty( $logs_error ) ) : ?>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    Analytics table has been created or repaired successfully.
+                </div>
+            <?php elseif ( ! empty( $logs_error ) ) : ?>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <?php echo esc_html( $logs_error ); ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ( ! $this->logs_table_is_available() ) : ?>
+                <div class="rt-ai-empty-state">
+                    <div class="rt-ai-empty-icon">📊</div>
+                    <h3>No Analytics Data Yet</h3>
+                    <p>After visitors use search, analytics data will appear here.</p>
+                    <a href="<?php echo esc_url( $logs_url ); ?>" class="rt-ai-button rt-ai-button-primary">
+                        Create Analytics Table
+                    </a>
+                </div>
+            <?php else : 
+                global $wpdb;
+                $table_name = self::get_logs_table_name();
+
+                $totals = $wpdb->get_row(
+                    "SELECT
+                        COUNT(*) AS total,
+                        SUM(ai_success) AS success_count,
+                        SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count
+                     FROM $table_name"
+                );
+
+                $total_searches = $totals ? (int) $totals->total : 0;
+                $success_count = $totals ? (int) $totals->success_count : 0;
+                $error_count = $totals ? (int) $totals->error_count : 0;
+                $success_rate = $this->calculate_success_rate( $success_count, $total_searches );
+
+                $no_results_count = (int) $wpdb->get_var(
+                    "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
+                );
+
+                $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
+                $last_24 = (int) $wpdb->get_var(
+                    $wpdb->prepare(
+                        "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
+                        $since_24h
+                    )
+                );
+
+                $daily_stats = $wpdb->get_results(
+                    "SELECT
+                        DATE(created_at) AS day,
+                        COUNT(*) AS total,
+                        SUM(ai_success) AS success_count
+                     FROM $table_name
+                     GROUP BY DATE(created_at)
+                     ORDER BY day DESC
+                     LIMIT 14"
+                );
+
+                $top_queries = $wpdb->get_results(
+                    "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
+                     FROM $table_name
+                     GROUP BY search_query
+                     ORDER BY total DESC
+                     LIMIT 20"
+                );
+
+                $top_errors = $wpdb->get_results(
+                    "SELECT ai_error, COUNT(*) AS total
+                     FROM $table_name
+                     WHERE ai_error IS NOT NULL AND ai_error <> ''
+                     GROUP BY ai_error
+                     ORDER BY total DESC
+                     LIMIT 10"
+                );
+
+                $recent_events = $wpdb->get_results(
+                    "SELECT *
+                     FROM $table_name
+                     ORDER BY created_at DESC
+                     LIMIT 50"
+                );
+                ?>
+
+                <div class="rt-ai-stats-grid">
+                    <div class="rt-ai-stat-card">
+                        <div class="rt-ai-stat-label">Total Searches</div>
+                        <div class="rt-ai-stat-value"><?php echo number_format( $total_searches ); ?></div>
+                    </div>
+                    <div class="rt-ai-stat-card">
+                        <div class="rt-ai-stat-label">Success Rate</div>
+                        <div class="rt-ai-stat-value"><?php echo esc_html( $success_rate ); ?>%</div>
+                    </div>
+                    <div class="rt-ai-stat-card">
+                        <div class="rt-ai-stat-label">Last 24 Hours</div>
+                        <div class="rt-ai-stat-value"><?php echo number_format( $last_24 ); ?></div>
+                    </div>
+                    <div class="rt-ai-stat-card">
+                        <div class="rt-ai-stat-label">Total Errors</div>
+                        <div class="rt-ai-stat-value"><?php echo number_format( $error_count ); ?></div>
+                    </div>
+                    <div class="rt-ai-stat-card">
+                        <div class="rt-ai-stat-label">No Results</div>
+                        <div class="rt-ai-stat-value"><?php echo number_format( $no_results_count ); ?></div>
+                    </div>
+                </div>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Last 14 Days</h2>
+                        <p>Daily search volume and success rates</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <?php if ( ! empty( $daily_stats ) ) : ?>
+                            <div class="rt-ai-table-wrapper">
+                                <table class="rt-ai-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Total Searches</th>
+                                            <th>Success Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $daily_stats as $row ) : 
+                                            $day_total = (int) $row->total;
+                                            $day_success = (int) $row->success_count;
+                                            $day_rate = $this->calculate_success_rate( $day_success, $day_total );
+                                        ?>
+                                            <tr>
+                                                <td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $row->day ) ) ); ?></td>
+                                                <td><?php echo number_format( $day_total ); ?></td>
+                                                <td>
+                                                    <span class="rt-ai-badge rt-ai-badge-<?php echo $day_rate >= 90 ? 'success' : ( $day_rate >= 70 ? 'warning' : 'error' ); ?>">
+                                                        <?php echo esc_html( $day_rate ); ?>%
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else : ?>
+                            <div class="rt-ai-empty-message">No recent activity yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Top Search Queries</h2>
+                        <p>Most frequently searched terms</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <?php if ( ! empty( $top_queries ) ) : ?>
+                            <div class="rt-ai-table-wrapper">
+                                <table class="rt-ai-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Query</th>
+                                            <th>Total Searches</th>
+                                            <th>AI Success Rate</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $top_queries as $row ) :
+                                            $total_q = (int) $row->total;
+                                            $success_q = (int) $row->success_count;
+                                            $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
+                                        ?>
+                                            <tr>
+                                                <td class="rt-ai-query-cell"><?php echo esc_html( $row->search_query ); ?></td>
+                                                <td><?php echo number_format( $total_q ); ?></td>
+                                                <td>
+                                                    <span class="rt-ai-badge rt-ai-badge-<?php echo $success_q_rate >= 90 ? 'success' : ( $success_q_rate >= 70 ? 'warning' : 'error' ); ?>">
+                                                        <?php echo esc_html( $success_q_rate ); ?>%
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else : ?>
+                            <div class="rt-ai-empty-message">No search data yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <?php if ( ! empty( $top_errors ) ) : ?>
+                    <div class="rt-ai-section">
+                        <div class="rt-ai-section-header">
+                            <h2>Top AI Errors</h2>
+                            <p>Most common error messages</p>
+                        </div>
+                        <div class="rt-ai-section-content">
+                            <div class="rt-ai-table-wrapper">
+                                <table class="rt-ai-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Error Message</th>
+                                            <th>Occurrences</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $top_errors as $err ) : 
+                                            $msg = (string) $err->ai_error;
+                                            if ( strlen( $msg ) > 80 ) {
+                                                $msg = substr( $msg, 0, 77 ) . '...';
+                                            }
+                                        ?>
+                                            <tr>
+                                                <td class="rt-ai-error-cell"><?php echo esc_html( $msg ); ?></td>
+                                                <td><?php echo number_format( (int) $err->total ); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Recent AI Search Events</h2>
+                        <p>Latest 50 search requests</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <?php if ( ! empty( $recent_events ) ) : ?>
+                            <div class="rt-ai-table-wrapper">
+                                <table class="rt-ai-table rt-ai-table-compact">
+                                    <thead>
+                                        <tr>
+                                            <th>Query</th>
+                                            <th>Results</th>
+                                            <th>Status</th>
+                                            <th>Error</th>
+                                            <th>Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $recent_events as $event ) : 
+                                            $err = (string) $event->ai_error;
+                                            if ( strlen( $err ) > 50 ) {
+                                                $err = substr( $err, 0, 47 ) . '...';
+                                            }
+                                        ?>
+                                            <tr>
+                                                <td class="rt-ai-query-cell"><?php echo esc_html( $event->search_query ); ?></td>
+                                                <td><?php echo esc_html( (int) $event->results_count ); ?></td>
+                                                <td>
+                                                    <?php if ( (int) $event->ai_success === 1 ) : ?>
+                                                        <span class="rt-ai-badge rt-ai-badge-success">Success</span>
+                                                    <?php else : ?>
+                                                        <span class="rt-ai-badge rt-ai-badge-error">Error</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="rt-ai-error-cell"><?php echo esc_html( $err ); ?></td>
+                                                <td class="rt-ai-date-cell"><?php echo esc_html( date_i18n( 'M j, g:i a', strtotime( $event->created_at ) ) ); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else : ?>
+                            <div class="rt-ai-empty-message">No recent search events logged yet.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 
     private function calculate_success_rate( $success_count, $total ) {
@@ -955,8 +1488,84 @@ class RivianTrackr_AI_Search {
              ORDER BY total DESC
              LIMIT 5"
         );
+        ?>
         
-        require_once plugin_dir_path( __FILE__ ) . 'templates/dashboard-widget.php';
+        <div class="rt-ai-widget-container">
+            <div class="rt-ai-widget-stats-grid">
+                <div class="rt-ai-widget-stat">
+                    <span class="rt-ai-widget-stat-value"><?php echo number_format( $total_searches ); ?></span>
+                    <span class="rt-ai-widget-stat-label">Total Searches</span>
+                </div>
+                <div class="rt-ai-widget-stat">
+                    <span class="rt-ai-widget-stat-value"><?php echo esc_html( $success_rate ); ?>%</span>
+                    <span class="rt-ai-widget-stat-label">Success Rate</span>
+                </div>
+                <div class="rt-ai-widget-stat">
+                    <span class="rt-ai-widget-stat-value"><?php echo number_format( $last_24 ); ?></span>
+                    <span class="rt-ai-widget-stat-label">Last 24 Hours</span>
+                </div>
+            </div>
+
+            <div class="rt-ai-widget-section">
+                <h4 class="rt-ai-widget-section-title">Top Search Queries</h4>
+                
+                <?php if ( ! empty( $top_queries ) ) : ?>
+                    <table class="rt-ai-widget-table">
+                        <thead>
+                            <tr>
+                                <th>Query</th>
+                                <th style="text-align: center; width: 60px;">Count</th>
+                                <th style="text-align: center; width: 80px;">Success</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ( $top_queries as $row ) : 
+                                $total_q = (int) $row->total;
+                                $success_q = (int) $row->success_count;
+                                $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
+                                
+                                if ( $success_q_rate >= 90 ) {
+                                    $badge_class = 'rt-ai-widget-badge-success';
+                                } elseif ( $success_q_rate >= 70 ) {
+                                    $badge_class = 'rt-ai-widget-badge-warning';
+                                } else {
+                                    $badge_class = 'rt-ai-widget-badge-error';
+                                }
+                                
+                                $query_display = esc_html( $row->search_query );
+                                if ( strlen( $query_display ) > 35 ) {
+                                    $query_display = substr( $query_display, 0, 32 ) . '...';
+                                }
+                            ?>
+                                <tr>
+                                    <td class="rt-ai-widget-query"><?php echo $query_display; ?></td>
+                                    <td style="text-align: center;">
+                                        <span class="rt-ai-widget-count"><?php echo number_format( $total_q ); ?></span>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <span class="rt-ai-widget-badge <?php echo esc_attr( $badge_class ); ?>">
+                                            <?php echo esc_html( $success_q_rate ); ?>%
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php else : ?>
+                    <div class="rt-ai-widget-empty">
+                        No search data yet. Waiting for visitors to use AI search.
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="rt-ai-widget-footer">
+                <a href="<?php echo admin_url( 'admin.php?page=rt-ai-search-analytics' ); ?>" 
+                   class="rt-ai-widget-link">
+                    View Full Analytics →
+                </a>
+            </div>
+        </div>
+        <?php
     }
 
     public function enqueue_frontend_assets() {
