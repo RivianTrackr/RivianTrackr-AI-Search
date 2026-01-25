@@ -4,7 +4,7 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add AI-powered search summaries to WordPress search results using OpenAI (GPT), Google Gemini, or Anthropic Claude. Generates intelligent summaries without delaying search results, with built-in caching, rate limiting, and analytics. Choose your preferred AI provider and model for optimal performance and cost.
- * Version: 3.4.0
+ * Version: 4.0.0
  * Author URI: https://riviantrackr.com
  * Author: Jose Castillo
  * License: GPL v2 or later
@@ -1163,7 +1163,7 @@ class RivianTrackr_AI_Search {
             <!-- Header -->
             <div class="rt-ai-header">
                 <h1>AI Search Settings</h1>
-                <p>Configure OpenAI-powered search summaries for your site.</p>
+                <p>Configure AI-powered search summaries for your site using OpenAI, Google Gemini, or Anthropic Claude.</p>
             </div>
 
             <!-- Status Card -->
@@ -1176,9 +1176,16 @@ class RivianTrackr_AI_Search {
                     <p>
                         <?php 
                         if ( $setup_complete ) {
-                            echo 'Your AI search is configured and running.';
+                            $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                            $provider_names = array(
+                                'openai' => 'OpenAI',
+                                'gemini' => 'Google Gemini',
+                                'claude' => 'Anthropic Claude'
+                            );
+                            $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'AI provider';
+                            echo 'Your AI search is configured and running with ' . esc_html( $display_name ) . '.';
                         } elseif ( ! $has_api_key ) {
-                            echo 'Add your OpenAI API key to get started.';
+                            echo 'Add your API key to get started.';
                         } else {
                             echo 'Enable AI search to start generating summaries.';
                         }
@@ -1188,8 +1195,17 @@ class RivianTrackr_AI_Search {
             </div>
 
             <?php if ( $refreshed ) : ?>
+                <?php
+                $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                $provider_names = array(
+                    'openai' => 'OpenAI',
+                    'gemini' => 'Google Gemini',
+                    'claude' => 'Anthropic Claude'
+                );
+                $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'the provider';
+                ?>
                 <div class="rt-ai-notice rt-ai-notice-success">
-                    Model list refreshed from OpenAI.
+                    Model list refreshed from <?php echo esc_html( $display_name ); ?>.
                 </div>
             <?php elseif ( ! empty( $error ) ) : ?>
                 <div class="rt-ai-notice rt-ai-notice-error">
@@ -1282,14 +1298,32 @@ class RivianTrackr_AI_Search {
                                 <span class="rt-ai-field-required">Required</span>
                             </div>
                             <div class="rt-ai-field-description">
-                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+                                <?php
+                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                                $api_links = array(
+                                    'openai' => '<a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>',
+                                    'gemini' => '<a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>',
+                                    'claude' => '<a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a>'
+                                );
+                                $link = isset( $api_links[$provider_id] ) ? $api_links[$provider_id] : '<a href="#">your provider\'s dashboard</a>';
+                                echo 'Get your API key from ' . $link;
+                                ?>
                             </div>
                             <div class="rt-ai-field-input">
+                                <?php
+                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                                $placeholders = array(
+                                    'openai' => 'sk-proj-...',
+                                    'gemini' => 'AIza...',
+                                    'claude' => 'sk-ant-...'
+                                );
+                                $placeholder = isset( $placeholders[$provider_id] ) ? $placeholders[$provider_id] : 'Enter your API key';
+                                ?>
                                 <input type="password" 
                                        id="rt-ai-api-key"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
                                        value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                                       placeholder="sk-proj-..." 
+                                       placeholder="<?php echo esc_attr( $placeholder ); ?>" 
                                        autocomplete="off" />
                             </div>
                             <div class="rt-ai-field-actions">
@@ -1317,7 +1351,16 @@ class RivianTrackr_AI_Search {
                                 <label>AI Model</label>
                             </div>
                             <div class="rt-ai-field-description">
-                                Recommended: <strong>gpt-4o-mini</strong> (fastest & most cost-effective)
+                                <?php
+                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
+                                $recommendations = array(
+                                    'openai' => 'Recommended: <strong>gpt-4o-mini</strong> (fastest & most cost-effective)',
+                                    'gemini' => 'Recommended: <strong>gemini-1.5-flash</strong> (best balance of speed & cost)',
+                                    'claude' => 'Recommended: <strong>claude-3-5-haiku-20241022</strong> (fast & affordable)'
+                                );
+                                $recommendation = isset( $recommendations[$provider_id] ) ? $recommendations[$provider_id] : 'Choose a model below';
+                                echo $recommendation;
+                                ?>
                             </div>
                             <div class="rt-ai-field-input">
                                 <?php
@@ -1451,6 +1494,19 @@ class RivianTrackr_AI_Search {
         <script>
         (function($) {
             $(document).ready(function() {
+                // Handle provider change
+                $('#rt-ai-provider-select').on('change', function() {
+                    var providerName = $(this).find('option:selected').text();
+                    var message = 'Provider changed to ' + providerName + '.\n\n';
+                    message += 'Please save your settings to:\n';
+                    message += '• Update the API key link\n';
+                    message += '• Load models for this provider\n';
+                    message += '• Update recommendations';
+                    
+                    alert(message);
+                });
+                
+                // Handle test API key button
                 $('#rt-ai-test-key-btn').on('click', function() {
                     var btn = $(this);
                     var apiKey = $('#rt-ai-api-key').val().trim();
@@ -1470,6 +1526,7 @@ class RivianTrackr_AI_Search {
                         data: {
                             action: 'rt_ai_test_api_key',
                             api_key: apiKey,
+                            provider: $('#rt-ai-provider-select').val(),
                             nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
                         },
                         success: function(response) {
