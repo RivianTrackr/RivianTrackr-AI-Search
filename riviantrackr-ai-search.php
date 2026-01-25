@@ -1266,11 +1266,6 @@ class RivianTrackr_AI_Search {
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <p class="description" style="margin-top: 8px;">
-                                        <strong>OpenAI:</strong> Industry standard<br>
-                                        <strong>Gemini:</strong> Best price-to-performance<br>
-                                        <strong>Claude:</strong> Superior reasoning
-                                    </p>
                                     <?php
                                 } else {
                                     echo '<p style="color: red;">⚠️ Provider classes not loaded.</p>';
