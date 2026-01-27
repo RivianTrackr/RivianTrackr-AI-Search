@@ -4,7 +4,7 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add AI-powered search summaries using OpenAI, Gemini, or Claude. Fast, cached, and analytics-enabled for optimal performance.
- * Version: 4.0.0
+ * Version: 1.0.1
  * Author URI: https://riviantrackr.com
  * Author: Jose Castillo
  * License: GPL v2 or later
@@ -416,45 +416,47 @@ class RivianTrackr_AI_Search {
     public function field_api_key() {
         $options = $this->get_options();
         ?>
-        <div class="rt-ai-field-input">
-            <input type="password" 
-                   id="rt-ai-api-key"
-                   name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
-                   value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                   placeholder="sk-proj-..." 
-                   autocomplete="off" />
-        </div>
-        
-        <div class="rt-ai-field-actions">
-            <button type="button" 
-                    id="rt-ai-test-key-btn" 
-                    class="button">
-                Test Connection
-            </button>
-        </div>
-        
+        <input type="password"
+               id="rt-ai-api-key"
+               class="regular-text"
+               name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+               value="<?php echo esc_attr( $options['api_key'] ); ?>"
+               placeholder="sk-proj-..."
+               autocomplete="off" />
+
+        <p>
+            <button type="button" id="rt-ai-test-key-btn" class="button">Test Connection</button>
+        </p>
+
         <div id="rt-ai-test-result"></div>
-        
+
         <script>
         (function($) {
-            $(document).ready(function() {
+            $(function() {
                 var btn = $('#rt-ai-test-key-btn');
                 var apiKeyInput = $('#rt-ai-api-key');
                 var providerSelect = $('#rt-ai-provider-select');
                 var resultDiv = $('#rt-ai-test-result');
-                
+
+                function showNotice(type, html) {
+                    var cls = (type === 'success') ? 'notice notice-success inline' :
+                              (type === 'error') ? 'notice notice-error inline' :
+                              'notice notice-info inline';
+                    resultDiv.html('<div class="' + cls + '"><p>' + html + '</p></div>');
+                }
+
                 btn.on('click', function() {
-                    var apiKey = apiKeyInput.val().trim();
-                    var provider = providerSelect.val();
-                    
+                    var apiKey = (apiKeyInput.val() || '').trim();
+                    var provider = providerSelect.length ? providerSelect.val() : 'openai';
+
                     if (!apiKey) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
+                        showNotice('error', 'Please enter an API key first.');
                         return;
                     }
-                    
+
                     btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
-                    
+                    showNotice('info', 'Testing API key...');
+
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
@@ -463,29 +465,41 @@ class RivianTrackr_AI_Search {
                             api_key: apiKey,
                             provider: provider,
                             nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
-                        },
-                        success: function(response) {
-                            btn.prop('disabled', false).text('Test Connection');
-                            
-                            if (response.success) {
-                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
-                                if (response.data.model_count) {
-                                    msg += '<br>Available models: ' + response.data.model_count;
-                                }
-                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
-                            }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
                         }
+                    }).done(function(response) {
+                        btn.prop('disabled', false).text('Test Connection');
+
+                        if (response && response.success) {
+                            var msg = '✓ ' + (response.data.message || 'API key works.');
+                            if (response.data.model_count) {
+                                msg += '<br>Available models: ' + response.data.model_count;
+                            }
+                            showNotice('success', msg);
+                        } else {
+                            var err = (response && response.data && response.data.message) ? response.data.message : 'Test failed.';
+                            showNotice('error', '✗ ' + err);
+                        }
+                    }).fail(function() {
+                        btn.prop('disabled', false).text('Test Connection');
+                        showNotice('error', 'Request failed. Please try again.');
                     });
                 });
             });
         })(jQuery);
         </script>
+        <?php
+    }
+
+    public function field_enable() {
+        $options = $this->get_options();
+        ?>
+        <label>
+            <input type="checkbox"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
+                   value="1"
+                   <?php checked( (int) $options['enable'], 1 ); ?> />
+            Enable AI search summary
+        </label>
         <?php
     }
 
@@ -569,29 +583,17 @@ class RivianTrackr_AI_Search {
     }
 
     public function field_provider() {
-        $options = $this->get_options();
+        $options   = $this->get_options();
         $providers = RT_AI_Provider_Factory::get_available_providers();
         ?>
-        <div class="rt-ai-field-input">
-            <select name="<?php echo esc_attr( $this->option_name ); ?>[provider]" 
-                    id="rt-ai-provider-select"
-                    style="min-width: 260px;">
-                <?php foreach ( $providers as $id => $name ) : ?>
-                    <option value="<?php echo esc_attr( $id ); ?>" 
-                            <?php selected( $options['provider'], $id ); ?>>
-                        <?php echo esc_html( $name ); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <script>
-        jQuery(document).ready(function($) {
-            $('#rt-ai-provider-select').on('change', function() {
-                var providerName = $(this).find('option:selected').text();
-                alert('Provider changed to ' + providerName + '. Please save your settings to see available models for this provider.');
-            });
-        });
-        </script>
+        <select name="<?php echo esc_attr( $this->option_name ); ?>[provider]" id="rt-ai-provider-select">
+            <?php foreach ( $providers as $id => $name ) : ?>
+                <option value="<?php echo esc_attr( $id ); ?>" <?php selected( $options['provider'], $id ); ?>>
+                    <?php echo esc_html( $name ); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description">Choose which AI provider to use for summaries.</p>
         <?php
     }
 
@@ -700,88 +702,17 @@ class RivianTrackr_AI_Search {
     }
 
     public function field_custom_css() {
-        $options = $this->get_options();
-        $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
+        $options    = $this->get_options();
+        $custom_css = isset( $options['custom_css'] ) ? (string) $options['custom_css'] : '';
         ?>
-        <div class="rt-ai-css-editor-wrapper">
-            <textarea 
-                name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
-                id="rt-ai-custom-css"
-                class="rt-ai-css-editor"
-                rows="15">
-                <?php echo esc_textarea( $custom_css ); ?></textarea>
-        </div>
-        
-        <p class="description">
-            Add custom CSS to style the AI search summary. This will override the default styles.
-            <br>
-            <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
-        </p>
-        
-        <div class="rt-ai-css-buttons">
-            <button type="button" id="rt-ai-reset-css" class="rt-ai-button rt-ai-button-secondary">
-                Reset to Empty
-            </button>
-            <button type="button" id="rt-ai-view-default-css" class="rt-ai-button rt-ai-button-secondary">
-                View Default CSS
-            </button>
-        </div>
-        
-        <!-- Modal HTML -->
-        <div id="rt-ai-default-css-modal" class="rt-ai-modal-overlay">
-            <div class="rt-ai-modal-content">
-                <button type="button" id="rt-ai-close-modal" class="rt-ai-modal-close" aria-label="Close">×</button>
-                <h2 class="rt-ai-modal-header">Default CSS Reference</h2>
-                <p class="rt-ai-modal-description">
-                    Copy and modify these default styles to customize your AI search summary.
-                </p>
-                <pre class="rt-ai-modal-code"><code><?php echo esc_html( file_get_contents( plugin_dir_path( __FILE__ ) . 'assets/rt-ai-search.css' ) ); ?></code></pre>
-            </div>
-        </div>
-        
-        <!-- JavaScript -->
-        <script>
-        (function($) {
-            $(document).ready(function() {
-                var modal = $('#rt-ai-default-css-modal');
-                var textarea = $('#rt-ai-custom-css');
-                
-                // Reset CSS
-                $('#rt-ai-reset-css').on('click', function() {
-                    if (confirm('Reset custom CSS? This will clear all your custom styles.')) {
-                        textarea.val('');
-                    }
-                });
-                
-                // View default CSS
-                $('#rt-ai-view-default-css').on('click', function() {
-                    modal.addClass('rt-ai-modal-open');
-                });
-                
-                // Close modal - X button
-                $('#rt-ai-close-modal').on('click', function() {
-                    modal.removeClass('rt-ai-modal-open');
-                });
-                
-                // Close on background click
-                modal.on('click', function(e) {
-                    if (e.target === this) {
-                        modal.removeClass('rt-ai-modal-open');
-                    }
-                });
-                
-                // Close on ESC key
-                $(document).on('keydown', function(e) {
-                    if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
-                        modal.removeClass('rt-ai-modal-open');
-                    }
-                });
-            });
-        })(jQuery);
-        </script>
+        <textarea
+            name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
+            rows="10"
+            class="large-text code"
+            spellcheck="false"><?php echo esc_textarea( $custom_css ); ?></textarea>
+        <p class="description">Optional. Add CSS to style the frontend AI summary output.</p>
         <?php
     }
-
 
     private function fetch_models_from_openai( $api_key ) {
         if ( empty( $api_key ) ) {
@@ -942,7 +873,6 @@ class RivianTrackr_AI_Search {
         }
 
         $options           = $this->get_options();
-        $cache             = get_option( $this->models_cache_option );
         $refreshed         = false;
         $error             = '';
         $cache_cleared     = false;
@@ -959,11 +889,9 @@ class RivianTrackr_AI_Search {
             } else {
                 $refreshed = $this->refresh_model_cache( $options['api_key'] );
                 if ( ! $refreshed ) {
-                    $error = 'Could not refresh models from OpenAI. Check your API key or try again later.';
+                    $error = 'Could not refresh models. Check your API key or try again later.';
                 }
             }
-
-            $cache = get_option( $this->models_cache_option );
         }
 
         if (
@@ -987,388 +915,39 @@ class RivianTrackr_AI_Search {
             admin_url( 'admin.php?page=rt-ai-search-settings&rt_ai_clear_cache=1' ),
             'rt_ai_clear_cache'
         );
-
-        // Check if setup is complete
-        $has_api_key = ! empty( $options['api_key'] );
-        $is_enabled  = ! empty( $options['enable'] );
-        $setup_complete = $has_api_key && $is_enabled;
         ?>
-        
-        <div class="rt-ai-settings-wrap">
-            <!-- Header -->
-            <div class="rt-ai-header">
-                <h1>AI Search Settings</h1>
-                <p>Configure AI-powered search summaries for your site using OpenAI, Google Gemini, or Anthropic Claude.</p>
-            </div>
 
-            <!-- Status Card -->
-            <div class="rt-ai-status-card <?php echo $setup_complete ? 'active' : ''; ?>">
-                <div class="rt-ai-status-icon">
-                    <?php echo $setup_complete ? '✓' : '○'; ?>
-                </div>
-                <div class="rt-ai-status-content">
-                    <h3><?php echo $setup_complete ? 'AI Search Active' : 'Setup Required'; ?></h3>
-                    <p>
-                        <?php 
-                        if ( $setup_complete ) {
-                            $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                            $provider_names = array(
-                                'openai' => 'OpenAI',
-                                'gemini' => 'Google Gemini',
-                                'claude' => 'Anthropic Claude'
-                            );
-                            $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'AI provider';
-                            echo 'Your AI search is configured and running with ' . esc_html( $display_name ) . '.';
-                        } elseif ( ! $has_api_key ) {
-                            echo 'Add your API key to get started.';
-                        } else {
-                            echo 'Enable AI search to start generating summaries.';
-                        }
-                        ?>
-                    </p>
-                </div>
-            </div>
+        <div class="wrap">
+            <h1>AI Search</h1>
 
             <?php if ( $refreshed ) : ?>
-                <?php
-                $provider_name = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                $provider_names = array(
-                    'openai' => 'OpenAI',
-                    'gemini' => 'Google Gemini',
-                    'claude' => 'Anthropic Claude'
-                );
-                $display_name = isset( $provider_names[$provider_name] ) ? $provider_names[$provider_name] : 'the provider';
-                ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
-                    Model list refreshed from <?php echo esc_html( $display_name ); ?>.
-                </div>
+                <div class="notice notice-success is-dismissible"><p>Model list refreshed.</p></div>
             <?php elseif ( ! empty( $error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
-                    <?php echo esc_html( $error ); ?>
-                </div>
+                <div class="notice notice-error"><p><?php echo esc_html( $error ); ?></p></div>
             <?php endif; ?>
 
             <?php if ( $cache_cleared && empty( $cache_clear_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
-                    AI summary cache cleared. New searches will fetch fresh answers.
-                </div>
+                <div class="notice notice-success is-dismissible"><p>AI summary cache cleared.</p></div>
             <?php elseif ( ! empty( $cache_clear_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
-                    <?php echo esc_html( $cache_clear_error ); ?>
-                </div>
+                <div class="notice notice-error"><p><?php echo esc_html( $cache_clear_error ); ?></p></div>
             <?php endif; ?>
 
             <form method="post" action="options.php">
-                <?php settings_fields( 'rt_ai_search_group' ); ?>
-
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
-                        <h2>Getting Started</h2>
-                        <p>Essential settings to enable AI search</p>
-                    </div>
-                    <div class="rt-ai-section-content">
-                        <!-- Enable Toggle -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>AI Search</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                Enable or disable AI-powered search summaries site-wide
-                            </div>
-                            <div class="rt-ai-toggle-wrapper">
-                                <label class="rt-ai-toggle">
-                                    <input type="checkbox" 
-                                           name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
-                                           value="1" 
-                                           <?php checked( $options['enable'], 1 ); ?> />
-                                    <span class="rt-ai-toggle-slider"></span>
-                                </label>
-                                <span class="rt-ai-toggle-label">
-                                    <?php echo $options['enable'] ? 'Enabled' : 'Disabled'; ?>
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- AI Provider Selection -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>AI Provider</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                Choose your AI provider. Each has different models, pricing, and strengths.
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <?php
-                                if ( class_exists( 'RT_AI_Provider_Factory' ) ) {
-                                    $providers = RT_AI_Provider_Factory::get_available_providers();
-                                    $current_provider = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                                    ?>
-                                    <select name="<?php echo esc_attr( $this->option_name ); ?>[provider]" 
-                                            id="rt-ai-provider-select"
-                                            style="min-width: 260px;">
-                                        <?php foreach ( $providers as $id => $name ) : ?>
-                                            <option value="<?php echo esc_attr( $id ); ?>" 
-                                                    <?php selected( $current_provider, $id ); ?>>
-                                                <?php echo esc_html( $name ); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <?php
-                                } else {
-                                    echo '<p style="color: red;">⚠️ Provider classes not loaded.</p>';
-                                }
-                                ?>
-                            </div>
-                        </div>
-
-                        <!-- API Key -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label for="rt-ai-api-key">API Key</label>
-                                <span class="rt-ai-field-required">Required</span>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                <?php
-                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                                $api_links = array(
-                                    'openai' => '<a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>',
-                                    'gemini' => '<a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>',
-                                    'claude' => '<a href="https://console.anthropic.com/settings/keys" target="_blank">Anthropic Console</a>'
-                                );
-                                $link = isset( $api_links[$provider_id] ) ? $api_links[$provider_id] : '<a href="#">your provider\'s dashboard</a>';
-                                echo 'Get your API key from ' . $link;
-                                ?>
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <?php
-                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                                $placeholders = array(
-                                    'openai' => 'sk-proj-...',
-                                    'gemini' => 'AIza...',
-                                    'claude' => 'sk-ant-...'
-                                );
-                                $placeholder = isset( $placeholders[$provider_id] ) ? $placeholders[$provider_id] : 'Enter your API key';
-                                ?>
-                                <input type="password" 
-                                       id="rt-ai-api-key"
-                                       name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
-                                       value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                                       placeholder="<?php echo esc_attr( $placeholder ); ?>" 
-                                       autocomplete="off" />
-                            </div>
-                            <div class="rt-ai-field-actions">
-                                <button type="button" 
-                                        id="rt-ai-test-key-btn" 
-                                        class="rt-ai-button rt-ai-button-secondary">
-                                    Test Connection
-                                </button>
-                            </div>
-                            <div id="rt-ai-test-result" style="margin-top: 12px;"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 2: AI Configuration -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
-                        <h2>AI Configuration</h2>
-                        <p>Customize how AI generates search summaries</p>
-                    </div>
-                    <div class="rt-ai-section-content">
-                        <!-- Model Selection -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>AI Model</label>
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <?php
-                                $provider_id = isset( $options['provider'] ) ? $options['provider'] : 'openai';
-                                $models = $this->get_available_models_for_dropdown( $provider_id, $options['api_key'] );
-                                if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
-                                    $models[] = $options['model'];
-                                }
-                                $models = array_unique( $models );
-                                sort( $models );
-                                ?>
-                                <select name="<?php echo esc_attr( $this->option_name ); ?>[model]">
-                                    <?php foreach ( $models as $model_id ) : ?>
-                                        <option value="<?php echo esc_attr( $model_id ); ?>" 
-                                                <?php selected( $options['model'], $model_id ); ?>>
-                                            <?php echo esc_html( $model_id ); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="rt-ai-field-actions">
-                                <a href="<?php echo esc_url( $refresh_url ); ?>" 
-                                   class="rt-ai-button rt-ai-button-secondary">
-                                    Refresh Models
-                                </a>
-                            </div>
-                            <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
-                                <div style="margin-top: 8px; font-size: 13px; color: #86868b;">
-                                    Last updated: <?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), intval( $cache['updated_at'] ) ) ); ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <!-- Max Posts -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>Context Size</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                Number of posts to send as context (more posts = better answers, higher cost)
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <input type="number" 
-                                       name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
-                                       value="<?php echo esc_attr( $options['max_posts'] ); ?>"
-                                       min="1" 
-                                       max="20" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 3: Performance -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
-                        <h2>Performance</h2>
-                        <p>Control rate limits and caching behavior</p>
-                    </div>
-                    <div class="rt-ai-section-content">
-                        <!-- Cache TTL -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>Cache Duration</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                How long to cache AI summaries (60 seconds to 24 hours)
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <input type="number"
-                                       name="<?php echo esc_attr( $this->option_name ); ?>[cache_ttl]"
-                                       value="<?php echo esc_attr( isset( $options['cache_ttl'] ) ? $options['cache_ttl'] : 3600 ); ?>"
-                                       min="60"
-                                       max="86400"
-                                       step="60" />
-                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
-                            </div>
-                            <div class="rt-ai-field-actions">
-                                <a href="<?php echo esc_url( $clear_cache_url ); ?>" 
-                                   class="rt-ai-button rt-ai-button-secondary">
-                                    Clear Cache Now
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- Rate Limit -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>Rate Limit</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                Maximum AI calls per minute across the entire site (0 = unlimited)
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <input type="number"
-                                       name="<?php echo esc_attr( $this->option_name ); ?>[max_calls_per_minute]"
-                                       value="<?php echo esc_attr( isset( $options['max_calls_per_minute'] ) ? $options['max_calls_per_minute'] : 30 ); ?>"
-                                       min="0"
-                                       step="1" />
-                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">calls/minute</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Section 4: Appearance -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
-                        <h2>Appearance</h2>
-                        <p>Customize how the AI search summary looks on your site</p>
-                    </div>
-                    <div class="rt-ai-section-content">
-                        <!-- Custom CSS Only -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label>Custom CSS</label>
-                            </div>
-                            <div class="rt-ai-field-description">
-                                Override default styles with your own CSS for complete control
-                            </div>
-                            <?php $this->field_custom_css(); ?>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="rt-ai-footer-actions">
-                    <?php submit_button( 'Save Settings', 'primary rt-ai-button rt-ai-button-primary', 'submit', false ); ?>
-                </div>
+                <?php
+                settings_fields( 'rt_ai_search_group' );
+                do_settings_sections( 'rt-ai-search' );
+                submit_button();
+                ?>
             </form>
-        </div>
 
-        <script>
-        (function($) {
-            $(document).ready(function() {
-                // Handle provider change
-                $('#rt-ai-provider-select').on('change', function() {
-                    var providerName = $(this).find('option:selected').text();
-                    var message = 'Provider changed to ' + providerName + '.\n\n';
-                    message += 'Please save your settings to:\n';
-                    message += '• Update the API key link\n';
-                    message += '• Load models for this provider\n';
-                    message += '• Update recommendations';
-                    
-                    alert(message);
-                });
-                
-                // Handle test API key button
-                $('#rt-ai-test-key-btn').on('click', function() {
-                    var btn = $(this);
-                    var apiKey = $('#rt-ai-api-key').val().trim();
-                    var resultDiv = $('#rt-ai-test-result');
-                    
-                    if (!apiKey) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
-                        return;
-                    }
-                    
-                    btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'rt_ai_test_api_key',
-                            api_key: apiKey,
-                            provider: $('#rt-ai-provider-select').val(),
-                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
-                        },
-                        success: function(response) {
-                            btn.prop('disabled', false).text('Test Connection');
-                            
-                            if (response.success) {
-                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
-                                if (response.data.model_count) {
-                                    msg += '<br>Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')';
-                                }
-                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
-                            }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
-                        }
-                    });
-                });
-            });
-        })(jQuery);
-        </script>
+            <hr />
+
+            <h2>Tools</h2>
+            <p>
+                <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">Refresh Models</a>
+                <a href="<?php echo esc_url( $clear_cache_url ); ?>" class="button">Clear AI Cache</a>
+            </p>
+        </div>
 
         <?php
     }
@@ -1378,10 +957,9 @@ class RivianTrackr_AI_Search {
             return;
         }
 
-        $logs_built      = false;
-        $logs_error      = '';
+        $logs_built = false;
+        $logs_error = '';
 
-        // Handle the create/repair action
         if (
             isset( $_GET['rt_ai_build_logs'] ) &&
             $_GET['rt_ai_build_logs'] === '1' &&
@@ -1394,45 +972,29 @@ class RivianTrackr_AI_Search {
             }
         }
 
-        // Create the URL for the create/repair button
         $logs_url = wp_nonce_url(
             admin_url( 'admin.php?page=rt-ai-search-analytics&rt_ai_build_logs=1' ),
             'rt_ai_build_logs'
         );
         ?>
-        
-        <div class="rt-ai-settings-wrap">
-            <!-- Header -->
-            <div class="rt-ai-header">
-                <h1>Analytics</h1>
-                <p>Track AI search usage, success rates, and identify trends.</p>
-            </div>
 
-            <!-- Notifications -->
+        <div class="wrap">
+            <h1>AI Search Analytics</h1>
+
             <?php if ( $logs_built && empty( $logs_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
-                    Analytics table has been created or repaired successfully.
-                </div>
+                <div class="notice notice-success is-dismissible"><p>Analytics table has been created or repaired successfully.</p></div>
             <?php elseif ( ! empty( $logs_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
-                    <?php echo esc_html( $logs_error ); ?>
-                </div>
+                <div class="notice notice-error"><p><?php echo esc_html( $logs_error ); ?></p></div>
             <?php endif; ?>
 
             <?php if ( ! $this->logs_table_is_available() ) : ?>
-                <!-- No Data State -->
-                <div class="rt-ai-empty-state">
-                    <div class="rt-ai-empty-icon">📊</div>
-                    <h3>No Analytics Data Yet</h3>
-                    <p>After visitors use search, analytics data will appear here.</p>
-                    <a href="<?php echo esc_url( $logs_url ); ?>" class="rt-ai-button rt-ai-button-primary">
-                        Create Analytics Table
-                    </a>
-                </div>
+                <p>No analytics data yet. After visitors use search, analytics data will appear here.</p>
+                <p><a href="<?php echo esc_url( $logs_url ); ?>" class="button button-primary">Create Analytics Table</a></p>
             <?php else : ?>
-                <?php $this->render_analytics_content(); ?>
+                <?php $this->render_analytics_section(); ?>
             <?php endif; ?>
         </div>
+
         <?php
     }
 
@@ -1725,14 +1287,10 @@ class RivianTrackr_AI_Search {
         return (int) round( ( $success_count / $total ) * 100 );
     }
 
-    /* ---------------------------------------------------------
-     *  Analytics page (updated to use helper)
-     * --------------------------------------------------------- */
-
     private function render_analytics_section() {
         if ( ! $this->logs_table_is_available() ) {
             ?>
-            <p>No analytics data yet. After visitors use search, you will see top queries and recent events here.</p>
+            <p>No analytics data yet. After visitors use search, analytics data will appear here.</p>
             <?php
             return;
         }
@@ -1802,49 +1360,36 @@ class RivianTrackr_AI_Search {
         ?>
 
         <h2>Overview</h2>
-        <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Total AI searches</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $total_searches ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Overall success rate</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $success_rate ); ?>%</p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Searches last 24 hours</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $last_24 ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Total AI errors</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $error_count ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Searches with no results</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $no_results_count ); ?></p>
-            </div>
-        </div>
+        <table class="widefat striped" style="max-width: 520px;">
+            <tbody>
+                <tr><td>Total Searches</td><td><?php echo number_format( $total_searches ); ?></td></tr>
+                <tr><td>Success Rate</td><td><?php echo esc_html( $success_rate ); ?>%</td></tr>
+                <tr><td>Last 24 Hours</td><td><?php echo number_format( $last_24 ); ?></td></tr>
+                <tr><td>Total Errors</td><td><?php echo number_format( $error_count ); ?></td></tr>
+                <tr><td>No Results</td><td><?php echo number_format( $no_results_count ); ?></td></tr>
+            </tbody>
+        </table>
 
-        <h2>Last 14 days</h2>
+        <h2>Last 14 Days</h2>
         <?php if ( ! empty( $daily_stats ) ) : ?>
-            <table class="widefat striped" style="max-width: 600px;">
+            <table class="widefat striped">
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Total searches</th>
-                        <th>Success rate</th>
+                        <th>Total Searches</th>
+                        <th>Success Rate</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $daily_stats as $row ) : ?>
                         <?php
-                        $day_total = (int) $row->total;
+                        $day_total   = (int) $row->total;
                         $day_success = (int) $row->success_count;
-                        $day_rate = $this->calculate_success_rate( $day_success, $day_total );
+                        $day_rate    = $this->calculate_success_rate( $day_success, $day_total );
                         ?>
                         <tr>
-                            <td><?php echo esc_html( $row->day ); ?></td>
-                            <td><?php echo esc_html( $day_total ); ?></td>
+                            <td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $row->day ) ) ); ?></td>
+                            <td><?php echo number_format( $day_total ); ?></td>
                             <td><?php echo esc_html( $day_rate ); ?>%</td>
                         </tr>
                     <?php endforeach; ?>
@@ -1854,26 +1399,26 @@ class RivianTrackr_AI_Search {
             <p>No recent activity yet.</p>
         <?php endif; ?>
 
-        <h2 style="margin-top: 2rem;">Top search queries</h2>
+        <h2>Top Search Queries</h2>
         <?php if ( ! empty( $top_queries ) ) : ?>
-            <table class="widefat striped" style="max-width: 900px;">
+            <table class="widefat striped">
                 <thead>
                     <tr>
-                        <th style="width: 50%;">Query</th>
-                        <th>Total searches</th>
-                        <th>AI success rate</th>
+                        <th>Query</th>
+                        <th>Total Searches</th>
+                        <th>AI Success Rate</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $top_queries as $row ) : ?>
                         <?php
-                        $total_q = (int) $row->total;
-                        $success_q = (int) $row->success_count;
+                        $total_q        = (int) $row->total;
+                        $success_q      = (int) $row->success_count;
                         $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
                         ?>
                         <tr>
                             <td><?php echo esc_html( $row->search_query ); ?></td>
-                            <td><?php echo esc_html( $total_q ); ?></td>
+                            <td><?php echo number_format( $total_q ); ?></td>
                             <td><?php echo esc_html( $success_q_rate ); ?>%</td>
                         </tr>
                     <?php endforeach; ?>
@@ -1883,64 +1428,58 @@ class RivianTrackr_AI_Search {
             <p>No search data yet.</p>
         <?php endif; ?>
 
-        <h2 style="margin-top: 2rem;">Top AI errors</h2>
         <?php if ( ! empty( $top_errors ) ) : ?>
-            <table class="widefat striped" style="max-width: 900px;">
+            <h2>Top AI Errors</h2>
+            <table class="widefat striped">
                 <thead>
                     <tr>
-                        <th style="width: 65%;">Error message</th>
+                        <th>Error Message</th>
                         <th>Occurrences</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $top_errors as $err ) : ?>
+                        <?php
+                        $msg = (string) $err->ai_error;
+                        if ( strlen( $msg ) > 200 ) {
+                            $msg = substr( $msg, 0, 197 ) . '...';
+                        }
+                        ?>
                         <tr>
-                            <td>
-                                <?php
-                                $msg = (string) $err->ai_error;
-                                if ( strlen( $msg ) > 120 ) {
-                                    $msg = substr( $msg, 0, 117 ) . '...';
-                                }
-                                echo esc_html( $msg );
-                                ?>
-                            </td>
-                            <td><?php echo esc_html( (int) $err->total ); ?></td>
+                            <td><?php echo esc_html( $msg ); ?></td>
+                            <td><?php echo number_format( (int) $err->total ); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
-        <?php else : ?>
-            <p>No AI errors logged yet.</p>
         <?php endif; ?>
 
-        <h2 style="margin-top: 2rem;">Recent AI search events</h2>
+        <h2>Recent AI Search Events</h2>
         <?php if ( ! empty( $recent_events ) ) : ?>
-            <table class="widefat striped" style="max-width: 1000px;">
+            <table class="widefat striped">
                 <thead>
                     <tr>
-                        <th style="width: 35%;">Query</th>
+                        <th>Query</th>
                         <th>Results</th>
-                        <th>AI status</th>
-                        <th>Error (short)</th>
+                        <th>Status</th>
+                        <th>Error</th>
                         <th>Date</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $recent_events as $event ) : ?>
+                        <?php
+                        $err = (string) $event->ai_error;
+                        if ( strlen( $err ) > 200 ) {
+                            $err = substr( $err, 0, 197 ) . '...';
+                        }
+                        ?>
                         <tr>
                             <td><?php echo esc_html( $event->search_query ); ?></td>
                             <td><?php echo esc_html( (int) $event->results_count ); ?></td>
-                            <td><?php echo (int) $event->ai_success === 1 ? 'Success' : 'Error'; ?></td>
-                            <td>
-                                <?php
-                                $err = (string) $event->ai_error;
-                                if ( strlen( $err ) > 80 ) {
-                                    $err = substr( $err, 0, 77 ) . '...';
-                                }
-                                echo esc_html( $err );
-                                ?>
-                            </td>
-                            <td><?php echo esc_html( $event->created_at ); ?></td>
+                            <td><?php echo ( (int) $event->ai_success === 1 ) ? 'Success' : 'Error'; ?></td>
+                            <td><?php echo esc_html( $err ); ?></td>
+                            <td><?php echo esc_html( date_i18n( 'M j, g:i a', strtotime( $event->created_at ) ) ); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -1948,12 +1487,9 @@ class RivianTrackr_AI_Search {
         <?php else : ?>
             <p>No recent search events logged yet.</p>
         <?php endif; ?>
+
         <?php
     }
-
-    /* ---------------------------------------------------------
-     *  Dashboard widget
-     * --------------------------------------------------------- */
 
     public function register_dashboard_widget() {
         if ( ! current_user_can( 'manage_options' ) ) {
