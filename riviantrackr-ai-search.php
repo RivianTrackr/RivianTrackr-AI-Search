@@ -3,7 +3,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
- * Description: Description: Add AI-powered search summaries using OpenAI ChatGPT. Fast, cached, and analytics-enabled for optimal performance.
+ * Description: Add AI-powered search summaries using OpenAI ChatGPT. Fast, cached, and analytics-enabled for optimal performance.
  * Version: 1.0.0
  * Author URI: https://riviantrackr.com
  * Author: Jose Castillo
@@ -862,38 +862,278 @@ class RivianTrackr_AI_Search {
         );
         ?>
 
-        <div class="wrap">
-            <h1>AI Search</h1>
+        <div class="wrap rt-ai-settings-wrap">
+            <div class="rt-ai-settings-header">
+                <h1 class="rt-ai-settings-title">
+                    <span class="rt-ai-settings-icon">🤖</span>
+                    AI Search Settings
+                </h1>
+                <span class="rt-ai-settings-version">v<?php echo esc_html( RT_AI_SEARCH_VERSION ); ?></span>
+            </div>
 
             <?php if ( $refreshed ) : ?>
-                <div class="notice notice-success is-dismissible"><p>Model list refreshed.</p></div>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    <strong>Success!</strong> Model list has been refreshed from OpenAI.
+                </div>
             <?php elseif ( ! empty( $error ) ) : ?>
-                <div class="notice notice-error"><p><?php echo esc_html( $error ); ?></p></div>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <strong>Error:</strong> <?php echo esc_html( $error ); ?>
+                </div>
             <?php endif; ?>
 
             <?php if ( $cache_cleared && empty( $cache_clear_error ) ) : ?>
-                <div class="notice notice-success is-dismissible"><p>AI summary cache cleared.</p></div>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    <strong>Success!</strong> AI summary cache has been cleared.
+                </div>
             <?php elseif ( ! empty( $cache_clear_error ) ) : ?>
-                <div class="notice notice-error"><p><?php echo esc_html( $cache_clear_error ); ?></p></div>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <strong>Error:</strong> <?php echo esc_html( $cache_clear_error ); ?>
+                </div>
             <?php endif; ?>
 
-            <form method="post" action="options.php">
-                <?php
-                settings_fields( 'rt_ai_search_group' );
-                do_settings_sections( 'rt-ai-search' );
-                submit_button();
-                ?>
+            <form method="post" action="options.php" class="rt-ai-settings-form">
+                <?php settings_fields( 'rt_ai_search_group' ); ?>
+                
+                <div class="rt-ai-settings-section">
+                    <h2>API Configuration</h2>
+                    <?php $this->render_api_fields(); ?>
+                </div>
+
+                <div class="rt-ai-settings-section">
+                    <h2>Search Settings</h2>
+                    <?php $this->render_search_fields(); ?>
+                </div>
+
+                <div class="rt-ai-settings-section">
+                    <h2>Performance & Caching</h2>
+                    <?php $this->render_performance_fields(); ?>
+                </div>
+
+                <div class="rt-ai-settings-section">
+                    <h2>Customization</h2>
+                    <?php $this->render_customization_fields(); ?>
+                </div>
+
+                <div class="rt-ai-settings-section">
+                    <?php submit_button( 'Save Settings', 'rt-ai-button', 'submit', false ); ?>
+                </div>
             </form>
 
-            <hr />
+            <div class="rt-ai-tools-section">
+                <h2>Maintenance Tools</h2>
+                <p>Use these tools to manage your AI search cache and refresh available models.</p>
+                
+                <div class="rt-ai-tools-grid">
+                    <a href="<?php echo esc_url( $refresh_url ); ?>" class="rt-ai-button rt-ai-button-secondary">
+                        🔄 Refresh Models
+                    </a>
+                    <a href="<?php echo esc_url( $clear_cache_url ); ?>" class="rt-ai-button rt-ai-button-secondary">
+                        🗑️ Clear AI Cache
+                    </a>
+                </div>
+            </div>
+        </div>
 
-            <h2>Tools</h2>
-            <p>
-                <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">Refresh Models</a>
-                <a href="<?php echo esc_url( $clear_cache_url ); ?>" class="button">Clear AI Cache</a>
+        <?php
+    }
+
+    private function render_api_fields() {
+        $options = $this->get_options();
+        ?>
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-api-key">OpenAI API Key</label>
+            <input type="password"
+                   id="rt-ai-api-key"
+                   class="rt-ai-field-input"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                   value="<?php echo esc_attr( $options['api_key'] ); ?>"
+                   placeholder="sk-proj-..."
+                   autocomplete="off" />
+            <p class="rt-ai-field-description">
+                Enter your OpenAI API key. You can get one from 
+                <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI Platform</a>.
+            </p>
+
+            <div class="rt-ai-test-section">
+                <button type="button" id="rt-ai-test-key-btn" class="rt-ai-button rt-ai-button-secondary">
+                    Test Connection
+                </button>
+                <div id="rt-ai-test-result" class="rt-ai-test-result"></div>
+            </div>
+        </div>
+
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-model">AI Model</label>
+            <?php
+            $models = $this->get_available_models_for_dropdown( 'openai', $options['api_key'] );
+            if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
+                $models[] = $options['model'];
+            }
+            $models = array_unique( $models );
+            sort( $models );
+            ?>
+            <select name="<?php echo esc_attr( $this->option_name ); ?>[model]" class="rt-ai-select" id="rt-ai-model">
+                <?php foreach ( $models as $model_id ) : ?>
+                    <option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $options['model'], $model_id ); ?>>
+                        <?php echo esc_html( $model_id ); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <p class="rt-ai-field-description">
+                Select which OpenAI model to use for generating search summaries.
             </p>
         </div>
 
+        <script>
+        (function($) {
+            $(function() {
+                var btn = $('#rt-ai-test-key-btn');
+                var apiKeyInput = $('#rt-ai-api-key');
+                var resultDiv = $('#rt-ai-test-result');
+
+                function showNotice(type, html) {
+                    var cls = 'rt-ai-notice rt-ai-notice-' + type;
+                    resultDiv.html('<div class="' + cls + '">' + html + '</div>');
+                }
+
+                btn.on('click', function() {
+                    var apiKey = (apiKeyInput.val() || '').trim();
+
+                    if (!apiKey) {
+                        showNotice('error', '<strong>Error:</strong> Please enter an API key first.');
+                        return;
+                    }
+
+                    btn.prop('disabled', true).text('Testing...');
+                    showNotice('info', 'Testing API key...');
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_test_api_key',
+                            api_key: apiKey,
+                            provider: 'openai',
+                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
+                        }
+                    }).done(function(response) {
+                        btn.prop('disabled', false).text('Test Connection');
+
+                        if (response && response.success) {
+                            var msg = '<strong>✓ Success!</strong> ' + (response.data.message || 'API key works.');
+                            if (response.data.model_count) {
+                                msg += '<br><small>Available models: ' + response.data.model_count + '</small>';
+                            }
+                            showNotice('success', msg);
+                        } else {
+                            var err = (response && response.data && response.data.message) ? response.data.message : 'Test failed.';
+                            showNotice('error', '<strong>✗ Error:</strong> ' + err);
+                        }
+                    }).fail(function() {
+                        btn.prop('disabled', false).text('Test Connection');
+                        showNotice('error', '<strong>Error:</strong> Request failed. Please try again.');
+                    });
+                });
+            });
+        })(jQuery);
+        </script>
+        <?php
+    }
+
+    private function render_search_fields() {
+        $options = $this->get_options();
+        ?>
+        <div class="rt-ai-field-group">
+            <div class="rt-ai-checkbox-wrapper">
+                <input type="checkbox"
+                       id="rt-ai-enable"
+                       name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
+                       value="1"
+                       <?php checked( (int) $options['enable'], 1 ); ?> />
+                <label for="rt-ai-enable" class="rt-ai-checkbox-label">
+                    Enable AI search summary on search results pages
+                </label>
+            </div>
+            <p class="rt-ai-field-description">
+                When enabled, visitors will see an AI-generated summary at the top of search results.
+            </p>
+        </div>
+
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-max-posts">Maximum Posts to Analyze</label>
+            <input type="number"
+                   id="rt-ai-max-posts"
+                   class="rt-ai-field-input"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
+                   value="<?php echo esc_attr( $options['max_posts'] ); ?>"
+                   min="1"
+                   max="20"
+                   style="max-width: 120px;" />
+            <p class="rt-ai-field-description">
+                How many posts or pages to pass as context for each search. Default: 20. 
+                More posts provide better context but increase API costs slightly.
+            </p>
+        </div>
+        <?php
+    }
+
+    private function render_performance_fields() {
+        $options = $this->get_options();
+        $max_calls = isset( $options['max_calls_per_minute'] ) ? (int) $options['max_calls_per_minute'] : 30;
+        $cache_ttl = isset( $options['cache_ttl'] ) ? (int) $options['cache_ttl'] : RT_AI_SEARCH_DEFAULT_CACHE_TTL;
+        ?>
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-rate-limit">Rate Limit (calls per minute)</label>
+            <input type="number"
+                   id="rt-ai-rate-limit"
+                   class="rt-ai-field-input"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[max_calls_per_minute]"
+                   value="<?php echo esc_attr( $max_calls ); ?>"
+                   min="0"
+                   step="1"
+                   style="max-width: 120px;" />
+            <p class="rt-ai-field-description">
+                Maximum number of OpenAI calls allowed per minute across the whole site.
+                Set to 0 for no limit. Cache hits do not count against this.
+            </p>
+        </div>
+
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-cache-ttl">Cache Lifetime (seconds)</label>
+            <input type="number"
+                   id="rt-ai-cache-ttl"
+                   class="rt-ai-field-input"
+                   name="<?php echo esc_attr( $this->option_name ); ?>[cache_ttl]"
+                   value="<?php echo esc_attr( $cache_ttl ); ?>"
+                   min="<?php echo RT_AI_SEARCH_MIN_CACHE_TTL; ?>"
+                   max="<?php echo RT_AI_SEARCH_MAX_CACHE_TTL; ?>"
+                   step="60"
+                   style="max-width: 120px;" />
+            <p class="rt-ai-field-description">
+                How long to cache each AI summary in seconds. 
+                Minimum <?php echo RT_AI_SEARCH_MIN_CACHE_TTL; ?> seconds, 
+                maximum <?php echo number_format( RT_AI_SEARCH_MAX_CACHE_TTL ); ?> seconds (24 hours).
+            </p>
+        </div>
+        <?php
+    }
+
+    private function render_customization_fields() {
+        $options    = $this->get_options();
+        $custom_css = isset( $options['custom_css'] ) ? (string) $options['custom_css'] : '';
+        ?>
+        <div class="rt-ai-field-group">
+            <label class="rt-ai-field-label" for="rt-ai-custom-css">Custom CSS</label>
+            <textarea
+                id="rt-ai-custom-css"
+                name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
+                rows="10"
+                class="rt-ai-textarea"
+                spellcheck="false"><?php echo esc_textarea( $custom_css ); ?></textarea>
+            <p class="rt-ai-field-description">
+                Optional. Add custom CSS to style the frontend AI summary output.
+            </p>
+        </div>
         <?php
     }
 
@@ -923,20 +1163,39 @@ class RivianTrackr_AI_Search {
         );
         ?>
 
-        <div class="wrap">
-            <h1>AI Search Analytics</h1>
+        <div class="wrap rt-ai-analytics-wrap">
+            <div class="rt-ai-analytics-header">
+                <h1 class="rt-ai-analytics-title">
+                    <span class="rt-ai-settings-icon">📊</span>
+                    AI Search Analytics
+                </h1>
+            </div>
 
             <?php if ( $logs_built && empty( $logs_error ) ) : ?>
-                <div class="notice notice-success is-dismissible"><p>Analytics table has been created or repaired successfully.</p></div>
+                <div class="rt-ai-notice rt-ai-notice-success">
+                    <strong>Success!</strong> Analytics table has been created or repaired successfully.
+                </div>
             <?php elseif ( ! empty( $logs_error ) ) : ?>
-                <div class="notice notice-error"><p><?php echo esc_html( $logs_error ); ?></p></div>
+                <div class="rt-ai-notice rt-ai-notice-error">
+                    <strong>Error:</strong> <?php echo esc_html( $logs_error ); ?>
+                </div>
             <?php endif; ?>
 
             <?php if ( ! $this->logs_table_is_available() ) : ?>
-                <p>No analytics data yet. After visitors use search, analytics data will appear here.</p>
-                <p><a href="<?php echo esc_url( $logs_url ); ?>" class="button button-primary">Create Analytics Table</a></p>
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-content">
+                        <div class="rt-ai-empty-message">
+                            No analytics data yet. After visitors use search, analytics data will appear here.
+                        </div>
+                        <div class="rt-ai-text-center">
+                            <a href="<?php echo esc_url( $logs_url ); ?>" class="rt-ai-button">
+                                Create Analytics Table
+                            </a>
+                        </div>
+                    </div>
+                </div>
             <?php else : ?>
-                <?php $this->render_analytics_section(); ?>
+                <?php $this->render_analytics_content(); ?>
             <?php endif; ?>
         </div>
 
@@ -1581,124 +1840,27 @@ class RivianTrackr_AI_Search {
         <?php
     }
 
-    public function enqueue_admin_assets() {
-        $screen = get_current_screen();
+    public function enqueue_admin_assets( $hook ) {
+        // Load on our plugin pages and dashboard
+        $plugin_pages = array(
+            'toplevel_page_rt-ai-search-settings',
+            'ai-search_page_rt-ai-search-analytics',
+        );
         
-        // Only load on dashboard
-        if ( ! $screen || $screen->id !== 'dashboard' ) {
+        $load_styles = in_array( $hook, $plugin_pages, true ) || $hook === 'index.php';
+        
+        if ( ! $load_styles ) {
             return;
         }
 
-        // Add inline CSS for dashboard widget
-        $widget_css = "
-            .rt-ai-widget-container {
-                margin: -12px;
-            }
-            .rt-ai-widget-stats-grid {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 12px;
-                padding: 16px;
-                background: #f9f9f9;
-                border-bottom: 1px solid #ddd;
-            }
-            .rt-ai-widget-stat {
-                text-align: center;
-            }
-            .rt-ai-widget-stat-value {
-                display: block;
-                font-size: 24px;
-                font-weight: 600;
-                color: #2271b1;
-                line-height: 1.2;
-            }
-            .rt-ai-widget-stat-label {
-                display: block;
-                font-size: 12px;
-                color: #646970;
-                margin-top: 4px;
-            }
-            .rt-ai-widget-section {
-                padding: 16px;
-            }
-            .rt-ai-widget-section-title {
-                margin: 0 0 12px 0;
-                font-size: 14px;
-                font-weight: 600;
-                color: #1d2327;
-            }
-            .rt-ai-widget-table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            .rt-ai-widget-table thead th {
-                text-align: left;
-                padding: 8px 8px;
-                font-size: 12px;
-                font-weight: 600;
-                color: #646970;
-                border-bottom: 1px solid #ddd;
-            }
-            .rt-ai-widget-table tbody td {
-                padding: 8px 8px;
-                font-size: 13px;
-                border-bottom: 1px solid #f0f0f1;
-            }
-            .rt-ai-widget-table tbody tr:last-child td {
-                border-bottom: none;
-            }
-            .rt-ai-widget-query {
-                color: #1d2327;
-                font-weight: 500;
-            }
-            .rt-ai-widget-count {
-                color: #646970;
-                font-weight: 500;
-            }
-            .rt-ai-widget-badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 3px;
-                font-size: 11px;
-                font-weight: 600;
-            }
-            .rt-ai-widget-badge-success {
-                background: #d1f4e0;
-                color: #00753e;
-            }
-            .rt-ai-widget-badge-warning {
-                background: #fcf3cd;
-                color: #997404;
-            }
-            .rt-ai-widget-badge-error {
-                background: #fce8e8;
-                color: #d63638;
-            }
-            .rt-ai-widget-empty {
-                padding: 20px;
-                text-align: center;
-                color: #646970;
-                font-size: 13px;
-            }
-            .rt-ai-widget-footer {
-                padding: 12px 16px;
-                border-top: 1px solid #ddd;
-                background: #f9f9f9;
-                text-align: center;
-            }
-            .rt-ai-widget-link {
-                color: #2271b1;
-                text-decoration: none;
-                font-size: 13px;
-                font-weight: 500;
-            }
-            .rt-ai-widget-link:hover {
-                color: #135e96;
-                text-decoration: underline;
-            }
-        ";
+        $version = RT_AI_SEARCH_VERSION;
         
-        wp_add_inline_style( 'dashboard', $widget_css );
+        wp_enqueue_style(
+            'rt-ai-search-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
+            array(),
+            $version
+        );
     }
 
     public function enqueue_frontend_assets() {
