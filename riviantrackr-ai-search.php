@@ -386,7 +386,7 @@ class RivianTrackr_AI_Search {
                value="<?php echo esc_attr( $options['api_key'] ); ?>"
                placeholder="sk-proj-..."
                autocomplete="off" />
-        <p class="description">Enter your OpenAI API key. You can get one from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>
+        <p class="description">Enter your OpenAI API key. You can get one from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>.
         </p>
 
         <p>
