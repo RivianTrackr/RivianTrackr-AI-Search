@@ -10,7 +10,7 @@ declare(strict_types=1);
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '1.0.0' );
+define( 'RT_AI_SEARCH_VERSION', '1.0.1' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
