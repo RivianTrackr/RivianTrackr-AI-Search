@@ -1764,232 +1764,6 @@ class RivianTrackr_AI_Search {
     }
 
     /* ---------------------------------------------------------
-     *  Analytics page (updated to use helper)
-     * --------------------------------------------------------- */
-
-    private function render_analytics_section() {
-        if ( ! $this->logs_table_is_available() ) {
-            ?>
-            <p>No analytics data yet. After visitors use search, you will see top queries and recent events here.</p>
-            <?php
-            return;
-        }
-
-        global $wpdb;
-        $table_name = self::get_logs_table_name();
-
-        $totals = $wpdb->get_row(
-            "SELECT
-                COUNT(*) AS total,
-                SUM(ai_success) AS success_count,
-                SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count
-             FROM $table_name"
-        );
-
-        $total_searches = $totals ? (int) $totals->total : 0;
-        $success_count  = $totals ? (int) $totals->success_count : 0;
-        $error_count    = $totals ? (int) $totals->error_count : 0;
-        $success_rate   = $this->calculate_success_rate( $success_count, $total_searches );
-
-        $no_results_count = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
-        );
-
-        $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
-        $last_24   = (int) $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
-                $since_24h
-            )
-        );
-
-        $daily_stats = $wpdb->get_results(
-            "SELECT
-                DATE(created_at) AS day,
-                COUNT(*) AS total,
-                SUM(ai_success) AS success_count
-             FROM $table_name
-             GROUP BY DATE(created_at)
-             ORDER BY day DESC
-             LIMIT 14"
-        );
-
-        $top_queries = $wpdb->get_results(
-            "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM $table_name
-             GROUP BY search_query
-             ORDER BY total DESC
-             LIMIT 20"
-        );
-
-        $top_errors = $wpdb->get_results(
-            "SELECT ai_error, COUNT(*) AS total
-             FROM $table_name
-             WHERE ai_error IS NOT NULL AND ai_error <> ''
-             GROUP BY ai_error
-             ORDER BY total DESC
-             LIMIT 10"
-        );
-
-        $recent_events = $wpdb->get_results(
-            "SELECT *
-             FROM $table_name
-             ORDER BY created_at DESC
-             LIMIT 50"
-        );
-        ?>
-
-        <h2>Overview</h2>
-        <div style="display:flex; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;">
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Total AI searches</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $total_searches ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Overall success rate</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $success_rate ); ?>%</p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Searches last 24 hours</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $last_24 ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Total AI errors</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $error_count ); ?></p>
-            </div>
-            <div style="flex:1 1 180px; min-width:180px; padding:0.75rem 1rem; border:1px solid #ccd0d4; border-radius:6px; background:#fff;">
-                <h3 style="margin:0 0 0.25rem 0; font-size:13px; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Searches with no results</h3>
-                <p style="margin:0; font-size:20px; font-weight:600;"><?php echo esc_html( $no_results_count ); ?></p>
-            </div>
-        </div>
-
-        <h2>Last 14 days</h2>
-        <?php if ( ! empty( $daily_stats ) ) : ?>
-            <table class="widefat striped" style="max-width: 600px;">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Total searches</th>
-                        <th>Success rate</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $daily_stats as $row ) : ?>
-                        <?php
-                        $day_total = (int) $row->total;
-                        $day_success = (int) $row->success_count;
-                        $day_rate = $this->calculate_success_rate( $day_success, $day_total );
-                        ?>
-                        <tr>
-                            <td><?php echo esc_html( $row->day ); ?></td>
-                            <td><?php echo esc_html( $day_total ); ?></td>
-                            <td><?php echo esc_html( $day_rate ); ?>%</td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else : ?>
-            <p>No recent activity yet.</p>
-        <?php endif; ?>
-
-        <h2 style="margin-top: 2rem;">Top search queries</h2>
-        <?php if ( ! empty( $top_queries ) ) : ?>
-            <table class="widefat striped" style="max-width: 900px;">
-                <thead>
-                    <tr>
-                        <th style="width: 50%;">Query</th>
-                        <th>Total searches</th>
-                        <th>AI success rate</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $top_queries as $row ) : ?>
-                        <?php
-                        $total_q = (int) $row->total;
-                        $success_q = (int) $row->success_count;
-                        $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
-                        ?>
-                        <tr>
-                            <td><?php echo esc_html( $row->search_query ); ?></td>
-                            <td><?php echo esc_html( $total_q ); ?></td>
-                            <td><?php echo esc_html( $success_q_rate ); ?>%</td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else : ?>
-            <p>No search data yet.</p>
-        <?php endif; ?>
-
-        <h2 style="margin-top: 2rem;">Top AI errors</h2>
-        <?php if ( ! empty( $top_errors ) ) : ?>
-            <table class="widefat striped" style="max-width: 900px;">
-                <thead>
-                    <tr>
-                        <th style="width: 65%;">Error message</th>
-                        <th>Occurrences</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $top_errors as $err ) : ?>
-                        <tr>
-                            <td>
-                                <?php
-                                $msg = (string) $err->ai_error;
-                                if ( strlen( $msg ) > 120 ) {
-                                    $msg = substr( $msg, 0, 117 ) . '...';
-                                }
-                                echo esc_html( $msg );
-                                ?>
-                            </td>
-                            <td><?php echo esc_html( (int) $err->total ); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else : ?>
-            <p>No AI errors logged yet.</p>
-        <?php endif; ?>
-
-        <h2 style="margin-top: 2rem;">Recent AI search events</h2>
-        <?php if ( ! empty( $recent_events ) ) : ?>
-            <table class="widefat striped" style="max-width: 1000px;">
-                <thead>
-                    <tr>
-                        <th style="width: 35%;">Query</th>
-                        <th>Results</th>
-                        <th>AI status</th>
-                        <th>Error (short)</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ( $recent_events as $event ) : ?>
-                        <tr>
-                            <td><?php echo esc_html( $event->search_query ); ?></td>
-                            <td><?php echo esc_html( (int) $event->results_count ); ?></td>
-                            <td><?php echo (int) $event->ai_success === 1 ? 'Success' : 'Error'; ?></td>
-                            <td>
-                                <?php
-                                $err = (string) $event->ai_error;
-                                if ( strlen( $err ) > 80 ) {
-                                    $err = substr( $err, 0, 77 ) . '...';
-                                }
-                                echo esc_html( $err );
-                                ?>
-                            </td>
-                            <td><?php echo esc_html( $event->created_at ); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else : ?>
-            <p>No recent search events logged yet.</p>
-        <?php endif; ?>
-        <?php
-    }
-
-    /* ---------------------------------------------------------
      *  Dashboard widget
      * --------------------------------------------------------- */
 
@@ -2290,16 +2064,22 @@ class RivianTrackr_AI_Search {
     }
 
     private function get_client_ip() {
-        $ip = 'unknown';
+        // Use REMOTE_ADDR by default - it's the only non-spoofable source.
+        // Sites behind trusted reverse proxies can define RT_AI_SEARCH_TRUSTED_PROXY_HEADER
+        // to read from X-Forwarded-For or similar headers.
+        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
 
-        if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-            $ip = $_SERVER['HTTP_CLIENT_IP'];
-        } elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            // Take first IP in list (original client)
-            $ips = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
-            $ip  = trim( $ips[0] );
-        } elseif ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-            $ip = $_SERVER['REMOTE_ADDR'];
+        // Allow sites behind trusted proxies to use forwarded headers
+        if ( defined( 'RT_AI_SEARCH_TRUSTED_PROXY_HEADER' ) && RT_AI_SEARCH_TRUSTED_PROXY_HEADER ) {
+            $header = 'HTTP_' . strtoupper( str_replace( '-', '_', RT_AI_SEARCH_TRUSTED_PROXY_HEADER ) );
+            if ( ! empty( $_SERVER[ $header ] ) ) {
+                // Take the first IP in the list (original client)
+                $ips = explode( ',', $_SERVER[ $header ] );
+                $forwarded_ip = trim( $ips[0] );
+                if ( filter_var( $forwarded_ip, FILTER_VALIDATE_IP ) ) {
+                    $ip = $forwarded_ip;
+                }
+            }
         }
 
         // Validate IP
