@@ -54,6 +54,8 @@ class RivianTrackr_AI_Search {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_action( 'wp_ajax_rt_ai_test_api_key', array( $this, 'ajax_test_api_key' ) );
+        add_action( 'wp_ajax_rt_ai_refresh_models', array( $this, 'ajax_refresh_models' ) );
+        add_action( 'wp_ajax_rt_ai_clear_cache', array( $this, 'ajax_clear_cache' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
@@ -623,6 +625,45 @@ class RivianTrackr_AI_Search {
         }
     }
 
+    public function ajax_refresh_models() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+        }
+
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_refresh_models' ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid security token. Please refresh the page.' ) );
+        }
+
+        $options = $this->get_options();
+        if ( empty( $options['api_key'] ) ) {
+            wp_send_json_error( array( 'message' => 'Cannot refresh models because no API key is set.' ) );
+        }
+
+        $refreshed = $this->refresh_model_cache( $options['api_key'] );
+        if ( $refreshed ) {
+            wp_send_json_success( array( 'message' => 'Model list refreshed from OpenAI.' ) );
+        } else {
+            wp_send_json_error( array( 'message' => 'Could not refresh models. Check your API key or try again later.' ) );
+        }
+    }
+
+    public function ajax_clear_cache() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+        }
+
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_clear_cache' ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid security token. Please refresh the page.' ) );
+        }
+
+        $cleared = $this->clear_ai_cache();
+        if ( $cleared ) {
+            wp_send_json_success( array( 'message' => 'AI summary cache cleared. New searches will fetch fresh answers.' ) );
+        } else {
+            wp_send_json_error( array( 'message' => 'Could not clear cache.' ) );
+        }
+    }
+
     public function field_model() {
         $options = $this->get_options();
         $models  = $this->get_available_models_for_dropdown( $options['api_key'] );
@@ -654,7 +695,7 @@ class RivianTrackr_AI_Search {
         ?>
         <input type="number" name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
                value="<?php echo esc_attr( $options['max_posts'] ); ?>"
-               min="1" max="20" />
+               min="1" max="50" />
         <p class="description">
             How many posts or pages to pass as context for each search. Default: 10. 
             More posts provide better context but increase API costs slightly.
@@ -1091,41 +1132,8 @@ class RivianTrackr_AI_Search {
             return;
         }
 
-        $options           = $this->get_options();
-        $cache             = get_option( $this->models_cache_option );
-        $refreshed         = false;
-        $error             = '';
-        $cache_cleared     = false;
-        $cache_clear_error = '';
-
-        // Handle POST actions (more secure than GET - nonces don't appear in logs/history)
-        if (
-            isset( $_POST['rt_ai_refresh_models'] ) &&
-            isset( $_POST['_wpnonce'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce'], 'rt_ai_refresh_models' )
-        ) {
-            if ( empty( $options['api_key'] ) ) {
-                $error = 'Cannot refresh models because no API key is set yet.';
-            } else {
-                $refreshed = $this->refresh_model_cache( $options['api_key'] );
-                if ( ! $refreshed ) {
-                    $error = 'Could not refresh models from OpenAI. Check your API key or try again later.';
-                }
-            }
-
-            $cache = get_option( $this->models_cache_option );
-        }
-
-        if (
-            isset( $_POST['rt_ai_clear_cache'] ) &&
-            isset( $_POST['_wpnonce'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce'], 'rt_ai_clear_cache' )
-        ) {
-            $cache_cleared = $this->clear_ai_cache();
-            if ( ! $cache_cleared ) {
-                $cache_clear_error = 'Could not clear AI cache.';
-            }
-        }
+        $options = $this->get_options();
+        $cache   = get_option( $this->models_cache_option );
 
         // Check if setup is complete
         $has_api_key = ! empty( $options['api_key'] );
@@ -1161,26 +1169,10 @@ class RivianTrackr_AI_Search {
                 </div>
             </div>
 
-            <!-- Notifications -->
-            <?php if ( $refreshed ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
-                    Model list refreshed from OpenAI.
-                </div>
-            <?php elseif ( ! empty( $error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
-                    <?php echo esc_html( $error ); ?>
-                </div>
-            <?php endif; ?>
-
-            <?php if ( $cache_cleared && empty( $cache_clear_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
-                    AI summary cache cleared. New searches will fetch fresh answers.
-                </div>
-            <?php elseif ( ! empty( $cache_clear_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
-                    <?php echo esc_html( $cache_clear_error ); ?>
-                </div>
-            <?php endif; ?>
+            <?php
+            // WordPress settings API handles success/error messages automatically
+            settings_errors( 'rt_ai_search_group' );
+            ?>
 
             <form method="post" action="options.php">
                 <?php settings_fields( 'rt_ai_search_group' ); ?>
@@ -1277,13 +1269,12 @@ class RivianTrackr_AI_Search {
                                 </select>
                             </div>
                             <div class="rt-ai-field-actions">
-                                <form method="post" style="display: inline;">
-                                    <?php wp_nonce_field( 'rt_ai_refresh_models' ); ?>
-                                    <button type="submit" name="rt_ai_refresh_models" value="1"
-                                            class="rt-ai-button rt-ai-button-secondary">
-                                        Refresh Models
-                                    </button>
-                                </form>
+                                <button type="button" id="rt-ai-refresh-models-btn"
+                                        class="rt-ai-button rt-ai-button-secondary"
+                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'rt_ai_refresh_models' ) ); ?>">
+                                    Refresh Models
+                                </button>
+                                <span id="rt-ai-refresh-models-result" style="margin-left: 12px;"></span>
                             </div>
                             <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
                                 <div style="margin-top: 8px; font-size: 13px; color: #86868b;">
@@ -1305,7 +1296,7 @@ class RivianTrackr_AI_Search {
                                        name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
                                        value="<?php echo esc_attr( $options['max_posts'] ); ?>"
                                        min="1" 
-                                       max="20" />
+                                       max="50" />
                             </div>
                         </div>
                     </div>
@@ -1336,13 +1327,12 @@ class RivianTrackr_AI_Search {
                                 <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
                             </div>
                             <div class="rt-ai-field-actions">
-                                <form method="post" style="display: inline;">
-                                    <?php wp_nonce_field( 'rt_ai_clear_cache' ); ?>
-                                    <button type="submit" name="rt_ai_clear_cache" value="1"
-                                            class="rt-ai-button rt-ai-button-secondary">
-                                        Clear Cache Now
-                                    </button>
-                                </form>
+                                <button type="button" id="rt-ai-clear-cache-btn"
+                                        class="rt-ai-button rt-ai-button-secondary"
+                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'rt_ai_clear_cache' ) ); ?>">
+                                    Clear Cache Now
+                                </button>
+                                <span id="rt-ai-clear-cache-result" style="margin-left: 12px;"></span>
                             </div>
                         </div>
 
@@ -1432,6 +1422,70 @@ class RivianTrackr_AI_Search {
                         error: function() {
                             btn.prop('disabled', false).text('Test Connection');
                             resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
+                        }
+                    });
+                });
+
+                // Refresh Models button
+                $('#rt-ai-refresh-models-btn').on('click', function() {
+                    var btn = $(this);
+                    var resultSpan = $('#rt-ai-refresh-models-result');
+                    var nonce = btn.data('nonce');
+
+                    btn.prop('disabled', true).text('Refreshing...');
+                    resultSpan.html('');
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_refresh_models',
+                            nonce: nonce
+                        },
+                        success: function(response) {
+                            btn.prop('disabled', false).text('Refresh Models');
+                            if (response.success) {
+                                resultSpan.html('<span style="color: #22c55e;">✓ ' + response.data.message + '</span>');
+                                // Reload page to show updated model list
+                                setTimeout(function() { location.reload(); }, 1000);
+                            } else {
+                                resultSpan.html('<span style="color: #ef4444;">✗ ' + response.data.message + '</span>');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Refresh Models');
+                            resultSpan.html('<span style="color: #ef4444;">✗ Request failed. Please try again.</span>');
+                        }
+                    });
+                });
+
+                // Clear Cache button
+                $('#rt-ai-clear-cache-btn').on('click', function() {
+                    var btn = $(this);
+                    var resultSpan = $('#rt-ai-clear-cache-result');
+                    var nonce = btn.data('nonce');
+
+                    btn.prop('disabled', true).text('Clearing...');
+                    resultSpan.html('');
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'rt_ai_clear_cache',
+                            nonce: nonce
+                        },
+                        success: function(response) {
+                            btn.prop('disabled', false).text('Clear Cache Now');
+                            if (response.success) {
+                                resultSpan.html('<span style="color: #22c55e;">✓ ' + response.data.message + '</span>');
+                            } else {
+                                resultSpan.html('<span style="color: #ef4444;">✗ ' + response.data.message + '</span>');
+                            }
+                        },
+                        error: function() {
+                            btn.prop('disabled', false).text('Clear Cache Now');
+                            resultSpan.html('<span style="color: #ef4444;">✗ Request failed. Please try again.</span>');
                         }
                     });
                 });
