@@ -41,13 +41,11 @@ class RivianTrackr_AI_Search {
     private $options_cache      = null;
 
     public function __construct() {
-        
+
         $this->cache_prefix = 'rt_ai_search_v' . str_replace( '.', '_', RT_AI_SEARCH_VERSION ) . '_';
-        
-        add_action( 'plugins_loaded', array( $this, 'register_settings' ), 1 );
-        add_action( 'init', array( $this, 'register_settings' ), 1 );
-        add_action( 'admin_init', array( $this, 'register_settings' ), 1 );
-        add_action( 'admin_head', array( $this, 'force_register_if_needed' ) );
+
+        // Register settings on admin_init (the recommended hook for Settings API)
+        add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
@@ -60,17 +58,6 @@ class RivianTrackr_AI_Search {
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
-    }
-
-    public function force_register_if_needed() {
-        global $wp_registered_settings;
-        
-        if (!isset($wp_registered_settings[$this->option_name])) {
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log('[RivianTrackr AI Search] FORCING registration - option was not registered!');
-            }
-            $this->register_settings();
-        }
     }
 
     public function add_plugin_settings_link( $links ) {
@@ -346,14 +333,6 @@ class RivianTrackr_AI_Search {
     }
 
     public function register_settings() {
-        // Prevent multiple registrations
-        static $registered = false;
-        if ($registered) {
-            return;
-        }
-        $registered = true;
-
-        // Register the option itself
         register_setting(
             'rt_ai_search_group',
             $this->option_name,
@@ -372,152 +351,6 @@ class RivianTrackr_AI_Search {
             )
         );
         
-        // ONLY add settings sections/fields if the function exists (i.e., we're in admin)
-        if (function_exists('add_settings_section')) {
-            
-            add_settings_section(
-                'rt_ai_search_main',
-                'AI Search Settings',
-                '__return_false',
-                'rt-ai-search'
-            );
-
-            add_settings_field(
-                'api_key',
-                'OpenAI API Key',
-                array( $this, 'field_api_key' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'model',
-                'Model',
-                array( $this, 'field_model' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'max_posts',
-                'Maximum posts to send to OpenAI',
-                array( $this, 'field_max_posts' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'enable',
-                'Enable AI search summary',
-                array( $this, 'field_enable' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'max_calls_per_minute',
-                'Max AI calls per minute',
-                array( $this, 'field_max_calls_per_minute' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'cache_ttl',
-                'AI cache lifetime (seconds)',
-                array( $this, 'field_cache_ttl' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-
-            add_settings_field(
-                'custom_css',
-                'Custom CSS',
-                array( $this, 'field_custom_css' ),
-                'rt-ai-search',
-                'rt_ai_search_main'
-            );
-        }
-    }
-
-    public function field_api_key() {
-        $options = $this->get_options();
-        ?>
-        <div class="rt-ai-field-input">
-            <input type="password" 
-                   id="rt-ai-api-key"
-                   name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
-                   value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                   placeholder="sk-proj-..." 
-                   autocomplete="off" />
-        </div>
-        
-        <div class="rt-ai-field-actions">
-            <button type="button" 
-                    id="rt-ai-test-key-btn" 
-                    class="button">
-                Test Connection
-            </button>
-        </div>
-        
-        <div id="rt-ai-test-result"></div>
-        
-        <p class="description">
-            Create an API key in the OpenAI dashboard and paste it here. 
-            Use the "Test Connection" button to verify it works.
-        </p>
-        
-        <script>
-        (function($) {
-            $(document).ready(function() {
-                var btn = $('#rt-ai-test-key-btn');
-                var apiKeyInput = $('#rt-ai-api-key');
-                var resultDiv = $('#rt-ai-test-result');
-                
-                btn.on('click', function() {
-                    var apiKey = apiKeyInput.val().trim();
-                    
-                    if (!apiKey) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
-                        return;
-                    }
-                    
-                    // Disable button and show loading
-                    btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'rt_ai_test_api_key',
-                            api_key: apiKey,
-                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
-                        },
-                        success: function(response) {
-                            btn.prop('disabled', false).text('Test Connection');
-                            
-                            if (response.success) {
-                                var msg = '<strong>✓ ' + response.data.message + '</strong>';
-                                if (response.data.model_count) {
-                                    msg += '<br>Available models: ' + response.data.model_count;
-                                    msg += ' (Chat models: ' + response.data.chat_models + ')';
-                                }
-                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
-                            } else {
-                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
-                            }
-                        },
-                        error: function() {
-                            btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
-                        }
-                    });
-                });
-            });
-        })(jQuery);
-        </script>
-        <?php
     }
 
     private function test_api_key( $api_key ) {
@@ -662,92 +495,6 @@ class RivianTrackr_AI_Search {
         } else {
             wp_send_json_error( array( 'message' => 'Could not clear cache.' ) );
         }
-    }
-
-    public function field_model() {
-        $options = $this->get_options();
-        $models  = $this->get_available_models_for_dropdown( $options['api_key'] );
-
-        if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
-            $models[] = $options['model'];
-        }
-
-        $models = array_unique( $models );
-        sort( $models );
-        ?>
-        <select name="<?php echo esc_attr( $this->option_name ); ?>[model]" style="min-width: 260px;">
-            <?php foreach ( $models as $model_id ) : ?>
-                <option value="<?php echo esc_attr( $model_id ); ?>" <?php selected( $options['model'], $model_id ); ?>>
-                    <?php echo esc_html( $model_id ); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <p class="description">
-            Pick the OpenAI model to use for AI search. 
-            <strong>Recommended: gpt-4o-mini</strong> (fastest & cheapest, ~2-3 seconds per summary).
-            Use the button below to refresh the list from OpenAI.
-        </p>
-        <?php
-    }
-
-    public function field_max_posts() {
-        $options = $this->get_options();
-        ?>
-        <input type="number" name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
-               value="<?php echo esc_attr( $options['max_posts'] ); ?>"
-               min="1" max="50" />
-        <p class="description">
-            How many posts or pages to pass as context for each search. Default: 10. 
-            More posts provide better context but increase API costs slightly.
-        </p>
-        <?php
-    }
-
-    public function field_enable() {
-        $options = $this->get_options();
-        ?>
-        <label>
-            <input type="checkbox" name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
-                   value="1" <?php checked( $options['enable'], 1 ); ?> />
-            Enable AI search summary
-        </label>
-        <?php
-    }
-
-    public function field_max_calls_per_minute() {
-        $options = $this->get_options();
-        $value   = isset( $options['max_calls_per_minute'] ) ? (int) $options['max_calls_per_minute'] : 30;
-        ?>
-        <input type="number"
-               name="<?php echo esc_attr( $this->option_name ); ?>[max_calls_per_minute]"
-               value="<?php echo esc_attr( $value ); ?>"
-               min="0"
-               step="1"
-               style="width: 90px;" />
-        <p class="description">
-            Maximum number of OpenAI calls allowed per minute across the whole site.
-            Set to 0 for no limit. Cache hits do not count against this.
-        </p>
-        <?php
-    }
-
-    public function field_cache_ttl() {
-        $options = $this->get_options();
-        $value   = isset( $options['cache_ttl'] ) ? (int) $options['cache_ttl'] : RT_AI_SEARCH_DEFAULT_CACHE_TTL;
-        ?>
-        <input type="number"
-               name="<?php echo esc_attr( $this->option_name ); ?>[cache_ttl]"
-               value="<?php echo esc_attr( $value ); ?>"
-               min="<?php echo RT_AI_SEARCH_MIN_CACHE_TTL; ?>"
-               max="<?php echo RT_AI_SEARCH_MAX_CACHE_TTL; ?>"
-               step="60"
-               style="width: 100px;" />
-        <p class="description">
-            How long to cache each AI summary in seconds. 
-            Minimum <?php echo RT_AI_SEARCH_MIN_CACHE_TTL; ?> seconds, 
-            maximum <?php echo number_format( RT_AI_SEARCH_MAX_CACHE_TTL ); ?> seconds (24 hours).
-        </p>
-        <?php
     }
 
     public function field_custom_css() {
