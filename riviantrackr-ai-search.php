@@ -2353,7 +2353,7 @@ class RivianTrackr_AI_Search {
         return $decoded;
     }
 
-    // Updated call_openai_for_search() with better error messages
+    // Updated call_openai_for_search() with retry logic for transient errors
     private function call_openai_for_search( $api_key, $model, $user_query, $posts ) {
         if ( empty( $api_key ) ) {
             return array( 'error' => 'API key is missing. Please configure the plugin settings.' );
@@ -2418,7 +2418,7 @@ class RivianTrackr_AI_Search {
                     'content' => $user_message,
                 ),
             ),
-            'max_tokens' => RT_AI_SEARCH_MAX_TOKENS, // Limit response length to control API costs
+            'max_tokens' => RT_AI_SEARCH_MAX_TOKENS,
         );
 
         if ( strpos( $model, 'gpt-5' ) !== 0 ) {
@@ -2438,64 +2438,158 @@ class RivianTrackr_AI_Search {
             'timeout' => RT_AI_SEARCH_API_TIMEOUT,
         );
 
+        // Retry logic: attempt up to 3 times with exponential backoff for transient errors
+        $max_retries = 2; // 2 retries = 3 total attempts
+        $attempt = 0;
+        $last_error = null;
+
+        while ( $attempt <= $max_retries ) {
+            $result = $this->make_openai_request( $endpoint, $args );
+
+            // Success - return the decoded response
+            if ( isset( $result['success'] ) && $result['success'] ) {
+                return $result['data'];
+            }
+
+            // Check if error is retryable
+            $is_retryable = isset( $result['retryable'] ) && $result['retryable'];
+            $last_error = $result;
+
+            if ( ! $is_retryable || $attempt >= $max_retries ) {
+                // Non-retryable error or max retries reached
+                break;
+            }
+
+            // Exponential backoff: 1s, 2s
+            $delay = pow( 2, $attempt );
+            sleep( $delay );
+
+            $attempt++;
+
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[RivianTrackr AI Search] Retry attempt ' . ( $attempt + 1 ) . ' after ' . $delay . 's delay' );
+            }
+        }
+
+        // Return the last error
+        return array( 'error' => $last_error['error'] ?? 'Unknown error occurred.' );
+    }
+
+    /**
+     * Make the actual HTTP request to OpenAI.
+     * Returns array with 'success', 'data'/'error', and 'retryable' flag.
+     */
+    private function make_openai_request( $endpoint, $args ) {
         $response = wp_safe_remote_post( $endpoint, $args );
 
+        // Connection/network errors
         if ( is_wp_error( $response ) ) {
             $error_msg = $response->get_error_message();
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
                 error_log( '[RivianTrackr AI Search] API request error: ' . $error_msg );
             }
 
-            // Provide user-friendly error messages based on common errors
-            if ( strpos( $error_msg, 'cURL error 28' ) !== false || strpos( $error_msg, 'timed out' ) !== false ) {
-                return array( 'error' => 'Request timed out. The AI service may be slow right now. Please try again.' );
+            // Timeouts and connection errors are retryable
+            $is_timeout = strpos( $error_msg, 'cURL error 28' ) !== false || strpos( $error_msg, 'timed out' ) !== false;
+            $is_connection = strpos( $error_msg, 'cURL error 6' ) !== false || strpos( $error_msg, 'resolve host' ) !== false;
+
+            if ( $is_timeout ) {
+                return array(
+                    'success'   => false,
+                    'error'     => 'Request timed out. The AI service may be slow right now. Please try again.',
+                    'retryable' => true,
+                );
             }
-            if ( strpos( $error_msg, 'cURL error 6' ) !== false || strpos( $error_msg, 'resolve host' ) !== false ) {
-                return array( 'error' => 'Could not connect to AI service. Please check your internet connection.' );
+            if ( $is_connection ) {
+                return array(
+                    'success'   => false,
+                    'error'     => 'Could not connect to AI service. Please check your internet connection.',
+                    'retryable' => true,
+                );
             }
 
-            return array( 'error' => 'Connection error: ' . $error_msg );
+            return array(
+                'success'   => false,
+                'error'     => 'Connection error: ' . $error_msg,
+                'retryable' => true, // Most connection errors are worth retrying
+            );
         }
 
         $code = wp_remote_retrieve_response_code( $response );
         $body = wp_remote_retrieve_body( $response );
 
+        // HTTP errors
         if ( $code < 200 || $code >= 300 ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
                 error_log( '[RivianTrackr AI Search] API HTTP error ' . $code . ' body: ' . $body );
             }
+
             $decoded_error = json_decode( $body, true );
-            
-            if ( isset( $decoded_error['error']['message'] ) ) {
-                $api_error = $decoded_error['error']['message'];
-                
-                // Provide context for common API errors
-                if ( $code === 401 ) {
-                    return array( 'error' => 'Invalid API key. Please check your plugin settings.' );
-                }
-                if ( $code === 429 ) {
-                    return array( 'error' => 'OpenAI rate limit exceeded. Please try again in a few moments.' );
-                }
-                if ( $code === 500 || $code === 503 ) {
-                    return array( 'error' => 'OpenAI service temporarily unavailable. Please try again later.' );
-                }
-                
-                return array( 'error' => $api_error );
+            $api_error = isset( $decoded_error['error']['message'] ) ? $decoded_error['error']['message'] : null;
+
+            // 429 Rate limit - retryable
+            if ( $code === 429 ) {
+                return array(
+                    'success'   => false,
+                    'error'     => 'OpenAI rate limit exceeded. Please try again in a few moments.',
+                    'retryable' => true,
+                );
             }
-            
-            return array( 'error' => 'API error (HTTP ' . $code . '). Please try again later.' );
+
+            // 5xx Server errors - retryable
+            if ( $code >= 500 && $code < 600 ) {
+                return array(
+                    'success'   => false,
+                    'error'     => 'OpenAI service temporarily unavailable. Please try again later.',
+                    'retryable' => true,
+                );
+            }
+
+            // 401 Invalid API key - NOT retryable
+            if ( $code === 401 ) {
+                return array(
+                    'success'   => false,
+                    'error'     => 'Invalid API key. Please check your plugin settings.',
+                    'retryable' => false,
+                );
+            }
+
+            // 400 Bad request - NOT retryable
+            if ( $code === 400 ) {
+                return array(
+                    'success'   => false,
+                    'error'     => $api_error ?? 'Bad request to AI service.',
+                    'retryable' => false,
+                );
+            }
+
+            // Other errors
+            return array(
+                'success'   => false,
+                'error'     => $api_error ?? 'API error (HTTP ' . $code . '). Please try again later.',
+                'retryable' => false,
+            );
         }
 
+        // Parse JSON response
         $decoded = json_decode( $body, true );
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
                 error_log( '[RivianTrackr AI Search] Failed to decode OpenAI response: ' . json_last_error_msg() );
             }
-            return array( 'error' => 'Could not understand AI response. Please try again.' );
+            return array(
+                'success'   => false,
+                'error'     => 'Could not understand AI response. Please try again.',
+                'retryable' => true, // Malformed responses might be transient
+            );
         }
 
-        return $decoded;
+        // Success
+        return array(
+            'success' => true,
+            'data'    => $decoded,
+        );
     }
 
     private function render_sources_html( $sources ) {
