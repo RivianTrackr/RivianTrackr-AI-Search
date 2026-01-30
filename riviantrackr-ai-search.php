@@ -93,11 +93,13 @@ class RivianTrackr_AI_Search {
             results_count int unsigned NOT NULL DEFAULT 0,
             ai_success tinyint(1) NOT NULL DEFAULT 0,
             ai_error text NULL,
+            cache_hit tinyint(1) NULL DEFAULT NULL,
             created_at datetime NOT NULL,
             PRIMARY KEY  (id),
             KEY created_at (created_at),
             KEY search_query_created (search_query(100), created_at),
-            KEY ai_success_created (ai_success, created_at)
+            KEY ai_success_created (ai_success, created_at),
+            KEY cache_hit_created (cache_hit, created_at)
         ) $charset_collate;";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -143,16 +145,60 @@ class RivianTrackr_AI_Search {
             }
         }
 
+        // Add cache_hit_created index if missing
+        if ( ! in_array( 'cache_hit_created', $index_names, true ) ) {
+            $wpdb->query(
+                "ALTER TABLE $table_name
+                 ADD INDEX cache_hit_created (cache_hit, created_at)"
+            );
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[RivianTrackr AI Search] Added cache_hit_created index' );
+            }
+        }
+
+        return true;
+    }
+
+    private static function add_missing_columns() {
+        global $wpdb;
+        $table_name = self::get_logs_table_name();
+
+        // Check if table exists
+        $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+        if ( $table_exists !== $table_name ) {
+            return false;
+        }
+
+        // Get existing columns
+        $columns = $wpdb->get_results( "SHOW COLUMNS FROM $table_name" );
+        $column_names = array();
+        foreach ( $columns as $column ) {
+            $column_names[] = $column->Field;
+        }
+
+        // Add cache_hit column if missing
+        if ( ! in_array( 'cache_hit', $column_names, true ) ) {
+            $wpdb->query(
+                "ALTER TABLE $table_name
+                 ADD COLUMN cache_hit tinyint(1) NULL DEFAULT NULL AFTER ai_error"
+            );
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[RivianTrackr AI Search] Added cache_hit column' );
+            }
+        }
+
         return true;
     }
 
     public static function activate() {
         self::create_logs_table();
+        self::add_missing_columns(); // Add columns to existing tables
         self::add_missing_indexes(); // Add indexes to existing tables
     }
 
     private function ensure_logs_table() {
         self::create_logs_table();
+        self::add_missing_columns(); // Ensure columns exist
         self::add_missing_indexes(); // Ensure indexes exist
         $this->logs_table_checked = false;
         return $this->logs_table_is_available();
@@ -201,7 +247,7 @@ class RivianTrackr_AI_Search {
         return $deleted;
     }
 
-    private function log_search_event( $search_query, $results_count, $ai_success, $ai_error = '' ) {
+    private function log_search_event( $search_query, $results_count, $ai_success, $ai_error = '', $cache_hit = null ) {
         if ( empty( $search_query ) ) {
             return;
         }
@@ -215,22 +261,36 @@ class RivianTrackr_AI_Search {
 
         $now = current_time( 'mysql' );
 
+        $data = array(
+            'search_query'  => $search_query,
+            'results_count' => (int) $results_count,
+            'ai_success'    => $ai_success ? 1 : 0,
+            'ai_error'      => $ai_error,
+            'cache_hit'     => $cache_hit,
+            'created_at'    => $now,
+        );
+
+        $formats = array(
+            '%s',
+            '%d',
+            '%d',
+            '%s',
+            $cache_hit === null ? null : '%d',
+            '%s',
+        );
+
+        // Remove null format for cache_hit if null value
+        if ( $cache_hit === null ) {
+            $formats[4] = '%s'; // Will be stored as NULL
+            $data['cache_hit'] = null;
+        } else {
+            $data['cache_hit'] = $cache_hit ? 1 : 0;
+        }
+
         $result = $wpdb->insert(
             $table_name,
-            array(
-                'search_query'  => $search_query,
-                'results_count' => (int) $results_count,
-                'ai_success'    => $ai_success ? 1 : 0,
-                'ai_error'      => $ai_error,
-                'created_at'    => $now,
-            ),
-            array(
-                '%s',
-                '%d',
-                '%d',
-                '%s',
-                '%s',
-            )
+            $data,
+            $formats
         );
 
         if ( false === $result && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -1345,13 +1405,19 @@ class RivianTrackr_AI_Search {
             "SELECT
                 COUNT(*) AS total,
                 SUM(ai_success) AS success_count,
-                SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count
+                SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count,
+                SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) AS cache_hits,
+                SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
              FROM $table_name"
         );
 
         $total_searches = $totals ? (int) $totals->total : 0;
         $success_count  = $totals ? (int) $totals->success_count : 0;
         $error_count    = $totals ? (int) $totals->error_count : 0;
+        $cache_hits     = $totals ? (int) $totals->cache_hits : 0;
+        $cache_misses   = $totals ? (int) $totals->cache_misses : 0;
+        $cache_total    = $cache_hits + $cache_misses;
+        $cache_hit_rate = $cache_total > 0 ? round( ( $cache_hits / $cache_total ) * 100, 1 ) : 0;
         $success_rate   = $this->calculate_success_rate( $success_count, $total_searches );
 
         $no_results_count = (int) $wpdb->get_var(
@@ -1370,7 +1436,9 @@ class RivianTrackr_AI_Search {
             "SELECT
                 DATE(created_at) AS day,
                 COUNT(*) AS total,
-                SUM(ai_success) AS success_count
+                SUM(ai_success) AS success_count,
+                SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) AS cache_hits,
+                SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
              FROM $table_name
              GROUP BY DATE(created_at)
              ORDER BY day DESC
@@ -1413,6 +1481,11 @@ class RivianTrackr_AI_Search {
                 <div class="rt-ai-stat-value"><?php echo esc_html( $success_rate ); ?>%</div>
             </div>
             <div class="rt-ai-stat-card">
+                <div class="rt-ai-stat-label">Cache Hit Rate</div>
+                <div class="rt-ai-stat-value"><?php echo esc_html( $cache_hit_rate ); ?>%</div>
+                <div class="rt-ai-stat-detail"><?php echo number_format( $cache_hits ); ?> hits / <?php echo number_format( $cache_misses ); ?> misses</div>
+            </div>
+            <div class="rt-ai-stat-card">
                 <div class="rt-ai-stat-label">Last 24 Hours</div>
                 <div class="rt-ai-stat-value"><?php echo number_format( $last_24 ); ?></div>
             </div>
@@ -1441,6 +1514,7 @@ class RivianTrackr_AI_Search {
                                     <th>Date</th>
                                     <th>Total Searches</th>
                                     <th>Success Rate</th>
+                                    <th>Cache Hit Rate</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1449,6 +1523,10 @@ class RivianTrackr_AI_Search {
                                     $day_total = (int) $row->total;
                                     $day_success = (int) $row->success_count;
                                     $day_rate = $this->calculate_success_rate( $day_success, $day_total );
+                                    $day_cache_hits = (int) $row->cache_hits;
+                                    $day_cache_misses = (int) $row->cache_misses;
+                                    $day_cache_total = $day_cache_hits + $day_cache_misses;
+                                    $day_cache_rate = $day_cache_total > 0 ? round( ( $day_cache_hits / $day_cache_total ) * 100, 1 ) : 0;
                                     ?>
                                     <tr>
                                         <td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $row->day ) ) ); ?></td>
@@ -1457,6 +1535,15 @@ class RivianTrackr_AI_Search {
                                             <span class="rt-ai-badge rt-ai-badge-<?php echo $day_rate >= 90 ? 'success' : ( $day_rate >= 70 ? 'warning' : 'error' ); ?>">
                                                 <?php echo esc_html( $day_rate ); ?>%
                                             </span>
+                                        </td>
+                                        <td>
+                                            <?php if ( $day_cache_total > 0 ) : ?>
+                                                <span class="rt-ai-badge rt-ai-badge-<?php echo $day_cache_rate >= 50 ? 'success' : ( $day_cache_rate >= 25 ? 'warning' : 'error' ); ?>">
+                                                    <?php echo esc_html( $day_cache_rate ); ?>%
+                                                </span>
+                                            <?php else : ?>
+                                                <span class="rt-ai-badge">N/A</span>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -1565,6 +1652,7 @@ class RivianTrackr_AI_Search {
                                     <th>Query</th>
                                     <th>Results</th>
                                     <th>Status</th>
+                                    <th>Cache</th>
                                     <th>Error</th>
                                     <th>Date</th>
                                 </tr>
@@ -1579,6 +1667,15 @@ class RivianTrackr_AI_Search {
                                                 <span class="rt-ai-badge rt-ai-badge-success">Success</span>
                                             <?php else : ?>
                                                 <span class="rt-ai-badge rt-ai-badge-error">Error</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ( $event->cache_hit === '1' || $event->cache_hit === 1 ) : ?>
+                                                <span class="rt-ai-badge rt-ai-badge-success">Hit</span>
+                                            <?php elseif ( $event->cache_hit === '0' || $event->cache_hit === 0 ) : ?>
+                                                <span class="rt-ai-badge rt-ai-badge-warning">Miss</span>
+                                            <?php else : ?>
+                                                <span class="rt-ai-badge rt-ai-badge-muted">N/A</span>
                                             <?php endif; ?>
                                         </td>
                                         <td class="rt-ai-error-cell">
@@ -2186,10 +2283,11 @@ class RivianTrackr_AI_Search {
 
         $results_count = count( $posts_for_ai );
         $ai_error      = '';
-        $ai_data       = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error );
+        $cache_hit     = null;
+        $ai_data       = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error, $cache_hit );
 
         if ( ! $ai_data ) {
-            $this->log_search_event( $search_query, $results_count, 0, $ai_error ? $ai_error : 'AI summary not available' );
+            $this->log_search_event( $search_query, $results_count, 0, $ai_error ? $ai_error : 'AI summary not available', $cache_hit );
 
             return rest_ensure_response(
                 array(
@@ -2199,7 +2297,7 @@ class RivianTrackr_AI_Search {
             );
         }
 
-        $this->log_search_event( $search_query, $results_count, 1, '' );
+        $this->log_search_event( $search_query, $results_count, 1, '', $cache_hit );
 
         $answer_html = isset( $ai_data['answer_html'] ) ? (string) $ai_data['answer_html'] : '';
         $sources     = isset( $ai_data['results'] ) && is_array( $ai_data['results'] ) ? $ai_data['results'] : array();
@@ -2257,31 +2355,36 @@ class RivianTrackr_AI_Search {
         return false;
     }
 
-    private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '' ) {
+    private function get_ai_data_for_search( $search_query, $posts_for_ai, &$ai_error = '', &$cache_hit = null ) {
         $options = $this->get_options();
         if ( empty( $options['api_key'] ) || empty( $options['enable'] ) ) {
             $ai_error = 'AI search is not configured. Please contact the site administrator.';
+            $cache_hit = null; // Not applicable - config error
             return null;
         }
 
         $normalized_query = strtolower( trim( $search_query ) );
         $namespace        = $this->get_cache_namespace();
-        
+
         $cache_key_data = implode( '|', array(
             $options['model'],
             $options['max_posts'],
             $normalized_query
         ) );
-        
+
         $cache_key        = $this->cache_prefix . 'ns' . $namespace . '_' . md5( $cache_key_data );
         $cached_raw       = get_transient( $cache_key );
 
         if ( $cached_raw ) {
             $ai_data = json_decode( $cached_raw, true );
             if ( json_last_error() === JSON_ERROR_NONE && is_array( $ai_data ) ) {
+                $cache_hit = true;
                 return $ai_data;
             }
         }
+
+        // Cache miss - will make API call
+        $cache_hit = false;
 
         if ( $this->is_rate_limited_for_ai_calls() ) {
             $ai_error = 'Too many AI requests right now. Please try again in a minute.';
