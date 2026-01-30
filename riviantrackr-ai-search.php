@@ -1499,7 +1499,14 @@ class RivianTrackr_AI_Search {
             <div class="rt-ai-stat-card">
                 <div class="rt-ai-stat-label">Cache Hit Rate</div>
                 <div class="rt-ai-stat-value"><?php echo esc_html( $cache_hit_rate ); ?>%</div>
-                <div class="rt-ai-stat-detail"><?php echo number_format( $cache_hits ); ?> hits / <?php echo number_format( $cache_misses ); ?> misses</div>
+            </div>
+            <div class="rt-ai-stat-card">
+                <div class="rt-ai-stat-label">Cache Hits</div>
+                <div class="rt-ai-stat-value"><?php echo number_format( $cache_hits ); ?></div>
+            </div>
+            <div class="rt-ai-stat-card">
+                <div class="rt-ai-stat-label">Cache Misses</div>
+                <div class="rt-ai-stat-value"><?php echo number_format( $cache_misses ); ?></div>
             </div>
             <div class="rt-ai-stat-card">
                 <div class="rt-ai-stat-label">Last 24 Hours</div>
