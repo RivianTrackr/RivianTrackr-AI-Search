@@ -21,6 +21,15 @@ define( 'RT_AI_SEARCH_MAX_SOURCES_DISPLAY', 5 );
 define( 'RT_AI_SEARCH_API_TIMEOUT', 60 );
 define( 'RT_AI_SEARCH_RATE_LIMIT_WINDOW', 70 );
 define( 'RT_AI_SEARCH_MAX_TOKENS', 1500 );
+define( 'RT_AI_SEARCH_IP_RATE_LIMIT', 10 ); // Requests per minute per IP
+
+// Error codes for structured API responses
+define( 'RT_AI_ERROR_BOT_DETECTED', 'bot_detected' );
+define( 'RT_AI_ERROR_RATE_LIMITED', 'rate_limited' );
+define( 'RT_AI_ERROR_NOT_CONFIGURED', 'not_configured' );
+define( 'RT_AI_ERROR_INVALID_QUERY', 'invalid_query' );
+define( 'RT_AI_ERROR_API_ERROR', 'api_error' );
+define( 'RT_AI_ERROR_NO_RESULTS', 'no_results' );
 
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -52,6 +61,7 @@ class RivianTrackr_AI_Search {
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+        add_filter( 'rest_post_dispatch', array( $this, 'add_rate_limit_headers' ), 10, 3 );
         add_action( 'wp_ajax_rt_ai_test_api_key', array( $this, 'ajax_test_api_key' ) );
         add_action( 'wp_ajax_rt_ai_refresh_models', array( $this, 'ajax_refresh_models' ) );
         add_action( 'wp_ajax_rt_ai_clear_cache', array( $this, 'ajax_clear_cache' ) );
@@ -368,11 +378,68 @@ class RivianTrackr_AI_Search {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
         
-        $output['custom_css'] = isset($input['custom_css']) ? wp_strip_all_tags($input['custom_css']) : '';
+        $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
         $this->options_cache = null;
 
         return $output;
+    }
+
+    /**
+     * Sanitize custom CSS input to prevent XSS and other attacks.
+     *
+     * @param string $css Raw CSS input.
+     * @return string Sanitized CSS.
+     */
+    private function sanitize_custom_css( $css ) {
+        if ( empty( $css ) ) {
+            return '';
+        }
+
+        // Strip HTML tags first
+        $css = wp_strip_all_tags( $css );
+
+        // Remove null bytes and other control characters
+        $css = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $css );
+
+        // Dangerous patterns to remove (case-insensitive)
+        $dangerous_patterns = array(
+            '/expression\s*\(/i',           // IE CSS expressions
+            '/javascript\s*:/i',            // JavaScript URLs
+            '/vbscript\s*:/i',              // VBScript URLs
+            '/behavior\s*:/i',              // IE behaviors
+            '/-moz-binding\s*:/i',          // Firefox XBL
+            '/@import/i',                   // External CSS imports
+            '/@charset/i',                  // Charset declarations
+            '/binding\s*:/i',               // Generic binding
+            '/\\\\[0-9a-f]+/i',             // Escaped unicode (can bypass filters)
+        );
+
+        foreach ( $dangerous_patterns as $pattern ) {
+            $css = preg_replace( $pattern, '', $css );
+        }
+
+        // Remove url() with potentially dangerous schemes
+        $css = preg_replace_callback(
+            '/url\s*\(\s*["\']?\s*([^)]+?)\s*["\']?\s*\)/i',
+            function( $matches ) {
+                $url = trim( $matches[1], " \t\n\r\0\x0B\"'" );
+                // Only allow relative URLs, http, https, and data:image
+                if ( preg_match( '/^(https?:|data:image\/)/i', $url ) || ! preg_match( '/^[a-z]+:/i', $url ) ) {
+                    return $matches[0];
+                }
+                return ''; // Remove dangerous URLs
+            },
+            $css
+        );
+
+        // Limit length to prevent DoS
+        $max_length = 10000;
+        if ( strlen( $css ) > $max_length ) {
+            $css = substr( $css, 0, $max_length );
+        }
+
+        return trim( $css );
     }
 
     public function add_settings_page() {
@@ -1944,7 +2011,8 @@ class RivianTrackr_AI_Search {
         );
 
         if ( ! empty( $options['custom_css'] ) ) {
-            $custom_css = wp_strip_all_tags( $options['custom_css'] );
+            // Defense in depth: sanitize again on output
+            $custom_css = $this->sanitize_custom_css( $options['custom_css'] );
             wp_add_inline_style( 'rt-ai-search', $custom_css );
         }
 
@@ -2060,19 +2128,48 @@ class RivianTrackr_AI_Search {
         return false;
     }
 
+    /**
+     * Check if an IP is rate limited and track the request.
+     *
+     * @param string $ip Client IP address.
+     * @return bool True if rate limited.
+     */
     private function is_ip_rate_limited( $ip ) {
-        $key   = 'rt_ai_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
-        $limit = 10; // 10 requests per minute per IP
-        $count = (int) get_transient( $key );
+        $rate_info = $this->get_rate_limit_info( $ip );
 
-        if ( $count >= $limit ) {
+        if ( $rate_info['remaining'] <= 0 ) {
             return true;
         }
 
-        $count++;
-        set_transient( $key, $count, 70 );
+        // Increment the counter
+        $key = 'rt_ai_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
+        set_transient( $key, $rate_info['used'] + 1, RT_AI_SEARCH_RATE_LIMIT_WINDOW );
 
         return false;
+    }
+
+    /**
+     * Get rate limit information for an IP.
+     *
+     * @param string $ip Client IP address.
+     * @return array Rate limit info with 'limit', 'remaining', 'used', and 'reset' keys.
+     */
+    private function get_rate_limit_info( $ip ) {
+        $key   = 'rt_ai_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
+        $limit = RT_AI_SEARCH_IP_RATE_LIMIT;
+        $used  = (int) get_transient( $key );
+
+        // Reset time is the start of the next minute
+        $current_minute = (int) gmdate( 'i' );
+        $current_second = (int) gmdate( 's' );
+        $reset_in = 60 - $current_second;
+
+        return array(
+            'limit'     => $limit,
+            'remaining' => max( 0, $limit - $used ),
+            'used'      => $used,
+            'reset'     => time() + $reset_in,
+        );
     }
 
     private function get_client_ip() {
@@ -2122,6 +2219,31 @@ class RivianTrackr_AI_Search {
     }
 
     /**
+     * Add rate limit headers to REST API responses.
+     *
+     * @param WP_REST_Response $response Response object.
+     * @param WP_REST_Server   $server   Server instance.
+     * @param WP_REST_Request  $request  Request object.
+     * @return WP_REST_Response Modified response.
+     */
+    public function add_rate_limit_headers( $response, $server, $request ) {
+        // Only add headers to our plugin's endpoints
+        $route = $request->get_route();
+        if ( strpos( $route, '/rt-ai-search/' ) === false ) {
+            return $response;
+        }
+
+        $client_ip  = $this->get_client_ip();
+        $rate_info  = $this->get_rate_limit_info( $client_ip );
+
+        $response->header( 'X-RateLimit-Limit', $rate_info['limit'] );
+        $response->header( 'X-RateLimit-Remaining', max( 0, $rate_info['remaining'] - 1 ) );
+        $response->header( 'X-RateLimit-Reset', $rate_info['reset'] );
+
+        return $response;
+    }
+
+    /**
      * Permission callback for REST API endpoint.
      *
      * @param WP_REST_Request $request Request object.
@@ -2131,7 +2253,7 @@ class RivianTrackr_AI_Search {
         // Block obvious bots to save API costs
         if ( $this->is_likely_bot() ) {
             return new WP_Error(
-                'rest_forbidden',
+                RT_AI_ERROR_BOT_DETECTED,
                 'AI search is not available for automated requests.',
                 array( 'status' => 403 )
             );
@@ -2140,10 +2262,14 @@ class RivianTrackr_AI_Search {
         // Per-IP rate limiting (more aggressive than global limit)
         $client_ip = $this->get_client_ip();
         if ( $this->is_ip_rate_limited( $client_ip ) ) {
+            $rate_info = $this->get_rate_limit_info( $client_ip );
             return new WP_Error(
-                'rest_too_many_requests',
+                RT_AI_ERROR_RATE_LIMITED,
                 'Too many requests from your IP address. Please try again in a minute.',
-                array( 'status' => 429 )
+                array(
+                    'status'     => 429,
+                    'retry_after' => $rate_info['reset'] - time(),
+                )
             );
         }
 
@@ -2247,6 +2373,7 @@ class RivianTrackr_AI_Search {
                 array(
                     'answer_html' => '',
                     'error'       => 'AI search is not enabled.',
+                    'error_code'  => RT_AI_ERROR_NOT_CONFIGURED,
                 )
             );
         }
@@ -2259,6 +2386,7 @@ class RivianTrackr_AI_Search {
                 array(
                     'answer_html' => '',
                     'error'       => 'Missing search query.',
+                    'error_code'  => RT_AI_ERROR_INVALID_QUERY,
                 )
             );
         }
@@ -2316,6 +2444,7 @@ class RivianTrackr_AI_Search {
                 array(
                     'answer_html' => '',
                     'error'       => $ai_error ? $ai_error : 'AI summary is not available right now.',
+                    'error_code'  => RT_AI_ERROR_API_ERROR,
                 )
             );
         }
