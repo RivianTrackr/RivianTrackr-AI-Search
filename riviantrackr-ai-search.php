@@ -1881,8 +1881,8 @@ class RivianTrackr_AI_Search {
                     </span>
                 </div>
 
-                <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content">
-                    <span class="rt-ai-spinner"></span>
+                <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content" aria-live="polite">
+                    <span class="rt-ai-spinner" role="status" aria-label="Loading AI summary"></span>
                     <p class="rt-ai-loading-text">Generating summary based on your search and RivianTrackr articles...</p>
                 </div>
 
@@ -2604,10 +2604,10 @@ class RivianTrackr_AI_Search {
         $hide_label = 'Hide sources';
 
         $html  = '<div class="rt-ai-sources">';
-        $html .= '<button type="button" class="rt-ai-sources-toggle" data-label-show="' . esc_attr( $show_label ) . '" data-label-hide="' . esc_attr( $hide_label ) . '">';
+        $html .= '<button type="button" class="rt-ai-sources-toggle" aria-expanded="false" aria-controls="rt-ai-sources-list" data-label-show="' . esc_attr( $show_label ) . '" data-label-hide="' . esc_attr( $hide_label ) . '">';
         $html .= esc_html( $show_label );
         $html .= '</button>';
-        $html .= '<ul class="rt-ai-sources-list" hidden>';
+        $html .= '<ul id="rt-ai-sources-list" class="rt-ai-sources-list" hidden>';
 
         foreach ( $sources as $src ) {
             $title   = isset( $src['title'] ) ? $src['title'] : '';
