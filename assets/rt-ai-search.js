@@ -21,7 +21,7 @@
     // Set timeout for 30 seconds
     var timeoutId = setTimeout(function() {
       container.classList.add('rt-ai-loaded');
-      container.innerHTML = '<p style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
+      container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
     }, 30000);
 
     fetch(endpoint, { credentials: 'same-origin' })
@@ -58,6 +58,7 @@
 
         if (data && data.error) {
           var errorP = document.createElement('p');
+          errorP.setAttribute('role', 'alert');
           errorP.style.cssText = 'margin:0; opacity:0.8;';
           errorP.textContent = String(data.error);
           container.innerHTML = '';
@@ -65,12 +66,12 @@
           return;
         }
 
-        container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
+        container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       })
       .catch(function(error) {
         clearTimeout(timeoutId);
         container.classList.add('rt-ai-loaded');
-        container.innerHTML = '<p style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
+        container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       });
 
     document.addEventListener('click', function(e) {
@@ -90,9 +91,11 @@
       if (isHidden) {
         list.removeAttribute('hidden');
         btn.textContent = hideLabel;
+        btn.setAttribute('aria-expanded', 'true');
       } else {
         list.setAttribute('hidden', 'hidden');
         btn.textContent = showLabel;
+        btn.setAttribute('aria-expanded', 'false');
       }
     });
   });
