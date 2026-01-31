@@ -386,10 +386,10 @@
 .rt-ai-error-cell {
     color: #86868b;
     font-size: 13px;
-    max-width: 250px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 350px;
+    word-wrap: break-word;
+    white-space: normal;
+    line-height: 1.4;
 }
 
 .rt-ai-date-cell {

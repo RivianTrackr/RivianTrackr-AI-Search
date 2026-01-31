@@ -1768,14 +1768,8 @@ class RivianTrackr_AI_Search {
                                                 <span class="rt-ai-badge rt-ai-badge-muted">N/A</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="rt-ai-error-cell">
-                                            <?php
-                                            $err = (string) $event->ai_error;
-                                            if ( strlen( $err ) > 50 ) {
-                                                $err = substr( $err, 0, 47 ) . '...';
-                                            }
-                                            echo esc_html( $err );
-                                            ?>
+                                        <td class="rt-ai-error-cell" <?php if ( ! empty( $event->ai_error ) ) : ?>title="<?php echo esc_attr( $event->ai_error ); ?>"<?php endif; ?>>
+                                            <?php echo esc_html( $event->ai_error ); ?>
                                         </td>
                                         <td class="rt-ai-date-cell">
                                             <?php echo esc_html( date_i18n( 'M j, g:i a', strtotime( $event->created_at ) ) ); ?>
