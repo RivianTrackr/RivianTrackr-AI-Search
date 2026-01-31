@@ -1,4 +1,52 @@
 (function() {
+  // Session cache helpers
+  var CACHE_PREFIX = 'rt_ai_search_';
+  var CACHE_TTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+  function getCacheKey(query) {
+    return CACHE_PREFIX + btoa(encodeURIComponent(query)).replace(/[^a-zA-Z0-9]/g, '');
+  }
+
+  function getFromCache(query) {
+    try {
+      var key = getCacheKey(query);
+      var cached = sessionStorage.getItem(key);
+      if (!cached) return null;
+
+      var data = JSON.parse(cached);
+      if (Date.now() > data.expires) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      return data.response;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveToCache(query, response) {
+    try {
+      var key = getCacheKey(query);
+      var data = {
+        response: response,
+        expires: Date.now() + CACHE_TTL
+      };
+      sessionStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+      // Storage full or unavailable - fail silently
+    }
+  }
+
+  function showSkeleton(container) {
+    container.innerHTML =
+      '<div class="rt-ai-skeleton" aria-hidden="true">' +
+        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-full"></div>' +
+        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-full"></div>' +
+        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-medium"></div>' +
+        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-short"></div>' +
+      '</div>';
+  }
+
   function ready(fn) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', fn);
@@ -16,6 +64,22 @@
     var q = (window.RTAISearch.query || '').trim();
     if (!q) return;
 
+    // Show skeleton loading immediately
+    showSkeleton(container);
+
+    // Check session cache first
+    var cached = getFromCache(q);
+    if (cached) {
+      container.classList.add('rt-ai-loaded');
+      if (cached.answer_html) {
+        container.innerHTML = cached.answer_html;
+      } else if (cached.error) {
+        container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">' +
+          document.createTextNode(cached.error).textContent + '</p>';
+      }
+      return;
+    }
+
     var endpoint = window.RTAISearch.endpoint + '?q=' + encodeURIComponent(q);
 
     // Set timeout for 30 seconds
@@ -27,24 +91,24 @@
     fetch(endpoint, { credentials: 'same-origin' })
       .then(function(response) {
         clearTimeout(timeoutId);
-        
+
         // Handle specific HTTP error codes
         if (response.status === 429) {
           return {
             error: 'Too many requests. Please wait a moment and try again.'
           };
         }
-        
+
         if (response.status === 403) {
           return {
             error: 'Access denied. AI search is not available for this request.'
           };
         }
-        
+
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
-        
+
         return response.json();
       })
       .then(function(data) {
@@ -52,6 +116,8 @@
         container.classList.add('rt-ai-loaded');
 
         if (data && data.answer_html) {
+          // Cache successful responses
+          saveToCache(q, data);
           container.innerHTML = data.answer_html;
           return;
         }

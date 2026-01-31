@@ -146,3 +146,44 @@
     align-items:flex-start;
   }
 }
+
+/* Skeleton loading animation */
+@keyframes rt-ai-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.rt-ai-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rt-ai-skeleton-line {
+  height: 1rem;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.15) 25%,
+    rgba(148, 163, 184, 0.3) 50%,
+    rgba(148, 163, 184, 0.15) 75%
+  );
+  background-size: 200% 100%;
+  animation: rt-ai-shimmer 1.5s ease-in-out infinite;
+}
+
+.rt-ai-skeleton-line-full {
+  width: 100%;
+}
+
+.rt-ai-skeleton-line-medium {
+  width: 75%;
+}
+
+.rt-ai-skeleton-line-short {
+  width: 50%;
+}
