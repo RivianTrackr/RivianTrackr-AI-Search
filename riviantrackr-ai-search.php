@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.14
+ * Version: 3.3.15
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.14' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.15' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -1743,7 +1743,6 @@ class RivianTrackr_AI_Search {
                             <thead>
                                 <tr>
                                     <th>Query</th>
-                                    <th>Results</th>
                                     <th>Status</th>
                                     <th>Cache</th>
                                     <th>Error</th>
@@ -1754,7 +1753,6 @@ class RivianTrackr_AI_Search {
                                 <?php foreach ( $recent_events as $event ) : ?>
                                     <tr>
                                         <td class="rt-ai-query-cell"><?php echo esc_html( $event->search_query ); ?></td>
-                                        <td><?php echo esc_html( (int) $event->results_count ); ?></td>
                                         <td>
                                             <?php if ( (int) $event->ai_success === 1 ) : ?>
                                                 <span class="rt-ai-badge rt-ai-badge-success">Success</span>
