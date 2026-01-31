@@ -37,7 +37,7 @@
     }
   }
 
-  function logSessionCacheHit(query) {
+  function logSessionCacheHit(query, resultsCount) {
     // Fire and forget - log session cache hit to analytics
     if (!window.RTAISearch || !window.RTAISearch.endpoint) return;
     var logEndpoint = window.RTAISearch.endpoint.replace('/summary', '/log-session-hit');
@@ -46,7 +46,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'q=' + encodeURIComponent(query)
+        body: 'q=' + encodeURIComponent(query) + '&results_count=' + (resultsCount || 0)
       });
     } catch (e) {
       // Fail silently - analytics logging is not critical
@@ -96,7 +96,7 @@
           document.createTextNode(cached.error).textContent + '</p>';
       }
       // Log session cache hit to analytics (fire and forget)
-      logSessionCacheHit(q);
+      logSessionCacheHit(q, cached.results_count);
       return;
     }
 

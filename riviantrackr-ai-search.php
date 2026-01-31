@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.12
+ * Version: 3.3.13
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.12' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.13' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -2241,6 +2241,11 @@ class RivianTrackr_AI_Search {
                         'sanitize_callback' => 'sanitize_text_field',
                         'validate_callback' => array( $this, 'validate_search_query' ),
                     ),
+                    'results_count' => array(
+                        'required'          => false,
+                        'sanitize_callback' => 'absint',
+                        'default'           => 0,
+                    ),
                 ),
             )
         );
@@ -2254,7 +2259,8 @@ class RivianTrackr_AI_Search {
      * @return WP_REST_Response Response object.
      */
     public function rest_log_session_cache_hit( $request ) {
-        $search_query = $request->get_param( 'q' );
+        $search_query  = $request->get_param( 'q' );
+        $results_count = $request->get_param( 'results_count' );
 
         if ( empty( $search_query ) ) {
             return rest_ensure_response( array( 'logged' => false ) );
@@ -2262,7 +2268,7 @@ class RivianTrackr_AI_Search {
 
         // Log as a session cache hit (cache_hit = 2 to distinguish from server cache hits)
         // We use 2 to indicate "session/browser cache hit" vs 1 for "server cache hit"
-        $this->log_search_event( $search_query, 0, 1, '', 2 );
+        $this->log_search_event( $search_query, $results_count, 1, '', 2 );
 
         return rest_ensure_response( array( 'logged' => true ) );
     }
@@ -2529,8 +2535,9 @@ class RivianTrackr_AI_Search {
 
         return rest_ensure_response(
             array(
-                'answer_html' => $answer_html,
-                'error'       => '',
+                'answer_html'   => $answer_html,
+                'results_count' => $results_count,
+                'error'         => '',
             )
         );
     }
