@@ -2048,9 +2048,9 @@ class RivianTrackr_AI_Search {
 
         $search_query = get_search_query();
         ?>
-        <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
-            <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
-                <div class="rt-ai-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
+        <div class="rt-ai-search-summary">
+            <div class="rt-ai-search-summary-inner">
+                <div class="rt-ai-summary-header">
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
                     </h2>

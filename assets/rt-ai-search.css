@@ -2,6 +2,10 @@
   to { transform: rotate(360deg); }
 }
 
+.rt-ai-search-summary {
+  margin-bottom: 1.5rem;
+}
+
 .rt-ai-search-summary-content {
   display:flex;
   align-items:center;
@@ -13,6 +17,10 @@
    border-radius: 20px;
    border: 0px;
    background-color: #121e2b;
+   padding: 1.25rem 1.25rem;
+   display:flex;
+   flex-direction:column;
+   gap:0.6rem;
 }
 
 .rt-ai-spinner {
@@ -132,6 +140,13 @@
   display:block;
   opacity:0.8;
   color:#cbd5f5;
+}
+
+.rt-ai-summary-header {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.75rem;
 }
 
 @media (max-width: 640px) {
