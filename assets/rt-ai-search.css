@@ -161,6 +161,14 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  width: 100%;
+  min-height: 80px;
+}
+
+/* When skeleton is showing, container should be block */
+.rt-ai-search-summary-content.rt-ai-loading,
+.rt-ai-search-summary-content:has(.rt-ai-skeleton) {
+  display: block;
 }
 
 .rt-ai-skeleton-line {
