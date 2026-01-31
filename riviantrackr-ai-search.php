@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.15
+ * Version: 3.3.16
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.15' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.16' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -2461,33 +2461,7 @@ class RivianTrackr_AI_Search {
             'order'          => 'DESC',
         );
 
-        // Check for search plugin integrations for better results
-        $search_results = null;
-
-        // Relevanssi integration
-        if ( function_exists( 'relevanssi_do_query' ) ) {
-            $search_results = new WP_Query();
-            $search_results->query_vars = $search_args;
-            relevanssi_do_query( $search_results );
-        }
-        // SearchWP integration
-        elseif ( class_exists( 'SearchWP' ) && method_exists( 'SearchWP', 'instance' ) ) {
-            $swp_query = new SWP_Query( array(
-                's'         => $search_query,
-                'engine'    => 'default',
-                'posts_per_page' => $max_posts,
-            ) );
-            if ( ! empty( $swp_query->posts ) ) {
-                $search_results = new WP_Query();
-                $search_results->posts = $swp_query->posts;
-                $search_results->post_count = count( $swp_query->posts );
-            }
-        }
-
-        // Fallback to native WP_Query
-        if ( ! $search_results ) {
-            $search_results = new WP_Query( $search_args );
-        }
+        $search_results = new WP_Query( $search_args );
 
         $posts_for_ai = array();
 
