@@ -9,6 +9,12 @@
   margin-top:0.75rem;
 }
 
+.rt-ai-search-summary-inner {
+   border-radius: 20px;
+   border: 0px;
+   background-color: #121e2b;
+}
+
 .rt-ai-spinner {
   width:14px;
   height:14px;
@@ -113,8 +119,8 @@
 }
 
 .rt-ai-sources-list a {
-  color:#22c55e;
-  text-decoration:underline;
+  color:#fba919;
+  text-decoration:none;
   text-underline-offset:2px;
 }
 
