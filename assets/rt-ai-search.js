@@ -38,6 +38,7 @@
   }
 
   function showSkeleton(container) {
+    container.classList.add('rt-ai-loading');
     container.innerHTML =
       '<div class="rt-ai-skeleton" aria-hidden="true">' +
         '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-full"></div>' +
@@ -70,6 +71,7 @@
     // Check session cache first
     var cached = getFromCache(q);
     if (cached) {
+      container.classList.remove('rt-ai-loading');
       container.classList.add('rt-ai-loaded');
       if (cached.answer_html) {
         container.innerHTML = cached.answer_html;
@@ -84,6 +86,7 @@
 
     // Set timeout for 30 seconds
     var timeoutId = setTimeout(function() {
+      container.classList.remove('rt-ai-loading');
       container.classList.add('rt-ai-loaded');
       container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
     }, 30000);
@@ -113,6 +116,7 @@
       })
       .then(function(data) {
         clearTimeout(timeoutId);
+        container.classList.remove('rt-ai-loading');
         container.classList.add('rt-ai-loaded');
 
         if (data && data.answer_html) {
@@ -136,6 +140,7 @@
       })
       .catch(function(error) {
         clearTimeout(timeoutId);
+        container.classList.remove('rt-ai-loading');
         container.classList.add('rt-ai-loaded');
         container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       });
