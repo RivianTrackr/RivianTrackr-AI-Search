@@ -132,12 +132,12 @@
 
     var endpoint = window.RTAISearch.endpoint + '?q=' + encodeURIComponent(q);
 
-    // Set timeout for 30 seconds
+    // Set timeout for 60 seconds (reasoning models can take longer)
     var timeoutId = setTimeout(function() {
       container.classList.remove('rt-ai-loading');
       container.classList.add('rt-ai-loaded');
       container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
-    }, 30000);
+    }, 60000);
 
     fetch(endpoint, { credentials: 'same-origin' })
       .then(function(response) {
