@@ -1,11 +1,11 @@
 <?php
 /**
- * Uninstall script for RivianTrackr AI Search
+ * Uninstall script for AI Search Summary
  *
  * This file runs when the plugin is deleted via the WordPress admin.
  * It removes all plugin data including options, transients, and database tables.
  *
- * @package RivianTrackr_AI_Search
+ * @package AI_Search_Summary
  */
 
 // Exit if not called by WordPress uninstall

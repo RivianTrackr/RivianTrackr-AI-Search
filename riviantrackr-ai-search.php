@@ -1,16 +1,15 @@
 <?php
 declare(strict_types=1);
 /**
- * Plugin Name: RivianTrackr AI Search
- * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
- * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.21
- * Author URI: https://riviantrackr.com
- * Author: RivianTrackr
+ * Plugin Name: AI Search Summary
+ * Plugin URI: https://github.com/josevarghese/AI-Search-Summary
+ * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
+ * Version: 4.0.0
+ * Author: Developer
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.21' );
+define( 'AI_SEARCH_VERSION', '4.0.0' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -36,7 +35,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class RivianTrackr_AI_Search {
+class AI_Search_Summary {
 
     private $option_name         = 'rt_ai_search_options';
     private $models_cache_option = 'rt_ai_search_models_cache';
@@ -51,7 +50,7 @@ class RivianTrackr_AI_Search {
 
     public function __construct() {
 
-        $this->cache_prefix = 'rt_ai_search_v' . str_replace( '.', '_', RT_AI_SEARCH_VERSION ) . '_';
+        $this->cache_prefix = 'rt_ai_search_v' . str_replace( '.', '_', AI_SEARCH_VERSION ) . '_';
 
         // Register settings on admin_init (the recommended hook for Settings API)
         add_action( 'admin_init', array( $this, 'register_settings' ) );
@@ -83,7 +82,7 @@ class RivianTrackr_AI_Search {
             'rt-ai-search-admin',
             plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
             array(),
-            RT_AI_SEARCH_VERSION
+            AI_SEARCH_VERSION
         );
     }
 
@@ -141,7 +140,7 @@ class RivianTrackr_AI_Search {
                  ADD INDEX search_query_created (search_query(100), created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Added search_query_created index' );
+                error_log( '[AI Search Summary] Added search_query_created index' );
             }
         }
 
@@ -152,7 +151,7 @@ class RivianTrackr_AI_Search {
                  ADD INDEX ai_success_created (ai_success, created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Added ai_success_created index' );
+                error_log( '[AI Search Summary] Added ai_success_created index' );
             }
         }
 
@@ -163,7 +162,7 @@ class RivianTrackr_AI_Search {
                  ADD INDEX cache_hit_created (cache_hit, created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Added cache_hit_created index' );
+                error_log( '[AI Search Summary] Added cache_hit_created index' );
             }
         }
 
@@ -194,7 +193,7 @@ class RivianTrackr_AI_Search {
                  ADD COLUMN cache_hit tinyint(1) NULL DEFAULT NULL AFTER ai_error"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Added cache_hit column' );
+                error_log( '[AI Search Summary] Added cache_hit column' );
             }
         }
 
@@ -321,7 +320,7 @@ class RivianTrackr_AI_Search {
 
         if ( false === $result && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
             error_log(
-                '[RivianTrackr AI Search] Failed to log search event: ' .
+                '[AI Search Summary] Failed to log search event: ' .
                 $wpdb->last_error .
                 ' | Query: ' . substr( $search_query, 0, 50 )
             );
@@ -341,6 +340,8 @@ class RivianTrackr_AI_Search {
             'max_calls_per_minute' => 30,
             'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
             'request_timeout'      => 60,
+            'site_name'            => get_bloginfo( 'name' ),
+            'site_description'     => '',
             'custom_css'           => '',
         );
 
@@ -383,6 +384,14 @@ class RivianTrackr_AI_Search {
         $output['request_timeout'] = isset($input['request_timeout'])
             ? max(10, min(120, intval($input['request_timeout'])))
             : 60;
+
+        // Site name and description for AI prompt
+        $output['site_name'] = isset($input['site_name'])
+            ? sanitize_text_field( trim($input['site_name']) )
+            : get_bloginfo( 'name' );
+        $output['site_description'] = isset($input['site_description'])
+            ? sanitize_textarea_field( trim($input['site_description']) )
+            : '';
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
@@ -503,6 +512,8 @@ class RivianTrackr_AI_Search {
                     'max_calls_per_minute' => 30,
                     'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
                     'request_timeout'      => 60,
+                    'site_name'            => '',
+                    'site_description'     => '',
                     'custom_css'           => '',
                 )
             )
@@ -870,7 +881,7 @@ class RivianTrackr_AI_Search {
 
         if ( is_wp_error( $response ) ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Model list error: ' . $response->get_error_message() );
+                error_log( '[AI Search Summary] Model list error: ' . $response->get_error_message() );
             }
             return array();
         }
@@ -880,7 +891,7 @@ class RivianTrackr_AI_Search {
 
         if ( $code < 200 || $code >= 300 ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Model list HTTP error ' . $code . ' body: ' . $body );
+                error_log( '[AI Search Summary] Model list HTTP error ' . $code . ' body: ' . $body );
             }
             return array();
         }
@@ -1135,6 +1146,49 @@ class RivianTrackr_AI_Search {
                                 </button>
                             </div>
                             <div id="rt-ai-test-result" style="margin-top: 12px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Site Configuration -->
+                <div class="rt-ai-section">
+                    <div class="rt-ai-section-header">
+                        <h2>Site Configuration</h2>
+                        <p>Configure how your site is described to the AI</p>
+                    </div>
+                    <div class="rt-ai-section-content">
+                        <!-- Site Name -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label for="rt-ai-site-name">Site Name</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                The name of your site (used in AI responses and loading text)
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="text"
+                                       id="rt-ai-site-name"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[site_name]"
+                                       value="<?php echo esc_attr( isset( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' ) ); ?>"
+                                       placeholder="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>" />
+                            </div>
+                        </div>
+
+                        <!-- Site Description -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label for="rt-ai-site-description">Site Description</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Describe your site's focus/niche (e.g., "a technology news site" or "a cooking and recipe blog"). This helps the AI understand context.
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="text"
+                                       id="rt-ai-site-description"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[site_description]"
+                                       value="<?php echo esc_attr( isset( $options['site_description'] ) ? $options['site_description'] : '' ); ?>"
+                                       placeholder="e.g., a technology news and reviews site" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1885,7 +1939,7 @@ class RivianTrackr_AI_Search {
 
         wp_add_dashboard_widget(
             'rt_ai_search_dashboard_widget',
-            'RivianTrackr AI Search',
+            'AI Search Summary',
             array( $this, 'render_dashboard_widget' )
         );
     }
@@ -2042,7 +2096,7 @@ class RivianTrackr_AI_Search {
             echo '<link rel="dns-prefetch" href="' . esc_url( $origin ) . '">' . "\n";
         }
 
-        $version = RT_AI_SEARCH_VERSION;
+        $version = AI_SEARCH_VERSION;
 
         wp_enqueue_style(
             'rt-ai-search',
@@ -2099,6 +2153,7 @@ class RivianTrackr_AI_Search {
         }
 
         $search_query = get_search_query();
+        $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
@@ -2114,11 +2169,11 @@ class RivianTrackr_AI_Search {
 
                 <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content" aria-live="polite">
                     <span class="rt-ai-spinner" role="status" aria-label="Loading AI summary"></span>
-                    <p class="rt-ai-loading-text">Generating summary based on your search and RivianTrackr articles...</p>
+                    <p class="rt-ai-loading-text">Generating summary based on your search and <?php echo esc_html( $site_name ); ?> articles...</p>
                 </div>
 
                 <div class="rt-ai-search-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
-                    AI summaries are generated automatically based on RivianTrackr articles and may be inaccurate or incomplete. Always verify important details.
+                    AI summaries are generated automatically based on <?php echo esc_html( $site_name ); ?> articles and may be inaccurate or incomplete. Always verify important details.
                 </div>
             </div>
         </div>
@@ -2129,7 +2184,6 @@ class RivianTrackr_AI_Search {
         $allowed_hooks = array(
             'toplevel_page_rt-ai-search-settings',
             'ai-search_page_rt-ai-search-analytics',
-            'riviantrackr-ai-search_page_rt-ai-search-analytics',
         );
         
         $is_our_page = in_array( $hook, $allowed_hooks, true ) || 
@@ -2139,7 +2193,7 @@ class RivianTrackr_AI_Search {
             return;
         }
 
-        $version = RT_AI_SEARCH_VERSION;
+        $version = AI_SEARCH_VERSION;
 
         wp_enqueue_style(
             'rt-ai-search-admin',
@@ -2666,7 +2720,7 @@ class RivianTrackr_AI_Search {
 
         if ( empty( $raw_content ) ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Empty response. Full API response: ' . wp_json_encode( $api_response ) );
+                error_log( '[AI Search Summary] Empty response. Full API response: ' . wp_json_encode( $api_response ) );
             }
             // Check if there's a finish_reason that explains the empty response
             $finish_reason = $api_response['choices'][0]['finish_reason'] ?? 'unknown';
@@ -2748,7 +2802,12 @@ class RivianTrackr_AI_Search {
             $posts_text .= "-----\n";
         }
 
-        $system_message = "You are the AI search engine for RivianTrackr.com, a Rivian focused news and guide site.
+        // Get site configuration for the prompt
+        $options = $this->get_options();
+        $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
+        $site_desc = ! empty( $options['site_description'] ) ? ', ' . $options['site_description'] : '';
+
+        $system_message = "You are the AI search engine for {$site_name}{$site_desc}.
     Use the provided posts as your entire knowledge base.
     Answer the user query based only on these posts.
     Prefer newer posts over older ones when there is conflicting or overlapping information, especially for news, software updates, or product changes.
@@ -2859,7 +2918,7 @@ class RivianTrackr_AI_Search {
             $attempt++;
 
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Retry attempt ' . ( $attempt + 1 ) . ' after ' . $delay . 's delay' );
+                error_log( '[AI Search Summary] Retry attempt ' . ( $attempt + 1 ) . ' after ' . $delay . 's delay' );
             }
         }
 
@@ -2878,7 +2937,7 @@ class RivianTrackr_AI_Search {
         if ( is_wp_error( $response ) ) {
             $error_msg = $response->get_error_message();
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] API request error: ' . $error_msg );
+                error_log( '[AI Search Summary] API request error: ' . $error_msg );
             }
 
             // Timeouts and connection errors are retryable
@@ -2913,7 +2972,7 @@ class RivianTrackr_AI_Search {
         // HTTP errors
         if ( $code < 200 || $code >= 300 ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] API HTTP error ' . $code . ' body: ' . $body );
+                error_log( '[AI Search Summary] API HTTP error ' . $code . ' body: ' . $body );
             }
 
             $decoded_error = json_decode( $body, true );
@@ -2968,7 +3027,7 @@ class RivianTrackr_AI_Search {
 
         if ( json_last_error() !== JSON_ERROR_NONE ) {
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[RivianTrackr AI Search] Failed to decode OpenAI response: ' . json_last_error_msg() );
+                error_log( '[AI Search Summary] Failed to decode OpenAI response: ' . json_last_error_msg() );
             }
             return array(
                 'success'   => false,
@@ -3033,6 +3092,6 @@ class RivianTrackr_AI_Search {
     }
 }
 
-register_activation_hook( __FILE__, array( 'RivianTrackr_AI_Search', 'activate' ) );
+register_activation_hook( __FILE__, array( 'AI_Search_Summary', 'activate' ) );
 
-new RivianTrackr_AI_Search();
+new AI_Search_Summary();
