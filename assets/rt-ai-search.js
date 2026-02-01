@@ -1,7 +1,34 @@
 (function() {
   // Session cache helpers
   var CACHE_PREFIX = 'rt_ai_search_';
+  var CACHE_VERSION_KEY = 'rt_ai_search_version';
   var CACHE_TTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+  function checkCacheVersion() {
+    // Invalidate browser cache if server cache version changed (e.g., model changed)
+    try {
+      var serverVersion = window.RTAISearch && window.RTAISearch.cacheVersion;
+      if (!serverVersion) return;
+
+      var storedVersion = sessionStorage.getItem(CACHE_VERSION_KEY);
+      if (storedVersion && storedVersion !== String(serverVersion)) {
+        // Version changed - clear all our cached data
+        var keysToRemove = [];
+        for (var i = 0; i < sessionStorage.length; i++) {
+          var key = sessionStorage.key(i);
+          if (key && key.indexOf(CACHE_PREFIX) === 0) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(function(key) {
+          sessionStorage.removeItem(key);
+        });
+      }
+      sessionStorage.setItem(CACHE_VERSION_KEY, String(serverVersion));
+    } catch (e) {
+      // Fail silently
+    }
+  }
 
   function getCacheKey(query) {
     return CACHE_PREFIX + btoa(encodeURIComponent(query)).replace(/[^a-zA-Z0-9]/g, '');
@@ -74,6 +101,9 @@
 
   ready(function() {
     if (!window.RTAISearch) return;
+
+    // Check if server cache was cleared (model changed, etc.) and invalidate browser cache
+    checkCacheVersion();
 
     var container = document.getElementById('rt-ai-search-summary-content');
     if (!container) return;
