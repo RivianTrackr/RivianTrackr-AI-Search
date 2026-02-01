@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: RivianTrackr AI Search
  * Plugin URI: https://github.com/RivianTrackr/RivianTrackr-AI-Search
  * Description: Add an OpenAI powered AI summary to WordPress search on RivianTrackr.com without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 3.3.20
+ * Version: 3.3.21
  * Author URI: https://riviantrackr.com
  * Author: RivianTrackr
  * License: GPL v2 or later
  */
 
-define( 'RT_AI_SEARCH_VERSION', '3.3.20' );
+define( 'RT_AI_SEARCH_VERSION', '3.3.21' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -340,6 +340,7 @@ class RivianTrackr_AI_Search {
             'enable'               => 0,
             'max_calls_per_minute' => 30,
             'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+            'request_timeout'      => 60,
             'custom_css'           => '',
         );
 
@@ -377,7 +378,12 @@ class RivianTrackr_AI_Search {
         } else {
             $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
         }
-        
+
+        // Request timeout: min 10 seconds, max 120 seconds, default 60
+        $output['request_timeout'] = isset($input['request_timeout'])
+            ? max(10, min(120, intval($input['request_timeout'])))
+            : 60;
+
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
         // Auto-clear cache when model changes
@@ -496,6 +502,7 @@ class RivianTrackr_AI_Search {
                     'enable'               => 0,
                     'max_calls_per_minute' => 30,
                     'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+                    'request_timeout'      => 60,
                     'custom_css'           => '',
                 )
             )
@@ -1245,6 +1252,25 @@ class RivianTrackr_AI_Search {
                                        min="0"
                                        step="1" />
                                 <span style="margin-left: 8px; color: #86868b; font-size: 14px;">calls/minute</span>
+                            </div>
+                        </div>
+
+                        <!-- Request Timeout -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Request Timeout</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                How long to wait for AI response before timing out (10-120 seconds). Increase for slower reasoning models.
+                            </div>
+                            <div class="rt-ai-field-input">
+                                <input type="number"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[request_timeout]"
+                                       value="<?php echo esc_attr( isset( $options['request_timeout'] ) ? $options['request_timeout'] : 60 ); ?>"
+                                       min="10"
+                                       max="120"
+                                       step="5" />
+                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
                             </div>
                         </div>
                     </div>
@@ -2043,9 +2069,10 @@ class RivianTrackr_AI_Search {
             'rt-ai-search',
             'RTAISearch',
             array(
-                'endpoint'     => rest_url( 'rt-ai-search/v1/summary' ),
-                'query'        => get_search_query(),
-                'cacheVersion' => $this->get_cache_namespace(),
+                'endpoint'       => rest_url( 'rt-ai-search/v1/summary' ),
+                'query'          => get_search_query(),
+                'cacheVersion'   => $this->get_cache_namespace(),
+                'requestTimeout' => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : 60,
             )
         );
     }
