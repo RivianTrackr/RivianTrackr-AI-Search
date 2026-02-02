@@ -387,6 +387,7 @@ class AI_Search_Summary {
             'site_name'            => get_bloginfo( 'name' ),
             'site_description'     => '',
             'show_openai_badge'    => 1,
+            'show_sources'         => 1,
             'custom_css'           => '',
         );
 
@@ -444,6 +445,7 @@ class AI_Search_Summary {
             : '';
 
         $output['show_openai_badge'] = isset($input['show_openai_badge']) && $input['show_openai_badge'] ? 1 : 0;
+        $output['show_sources'] = isset($input['show_sources']) && $input['show_sources'] ? 1 : 0;
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
@@ -1289,6 +1291,28 @@ class AI_Search_Summary {
                                 </label>
                                 <span class="aiss-toggle-label">
                                     <?php echo ( isset( $options['show_openai_badge'] ) && $options['show_openai_badge'] ) ? 'Visible' : 'Hidden'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Show Sources -->
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label>Show Sources</label>
+                            </div>
+                            <div class="aiss-field-description">
+                                Display a collapsible list of source articles used to generate the summary
+                            </div>
+                            <div class="aiss-toggle-wrapper">
+                                <label class="aiss-toggle">
+                                    <input type="checkbox"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[show_sources]"
+                                           value="1"
+                                           <?php checked( isset( $options['show_sources'] ) ? $options['show_sources'] : 1, 1 ); ?> />
+                                    <span class="aiss-toggle-slider"></span>
+                                </label>
+                                <span class="aiss-toggle-label">
+                                    <?php echo ( isset( $options['show_sources'] ) && $options['show_sources'] ) ? 'Visible' : 'Hidden'; ?>
                                 </span>
                             </div>
                         </div>
@@ -2764,7 +2788,10 @@ class AI_Search_Summary {
 
         $answer_html = wp_kses( $answer_html, $allowed_tags );
 
-        if ( ! empty( $sources ) ) {
+        // Add sources if enabled in settings
+        $options = $this->get_options();
+        $show_sources = isset( $options['show_sources'] ) ? $options['show_sources'] : 1;
+        if ( $show_sources && ! empty( $sources ) ) {
             $answer_html .= $this->render_sources_html( $sources );
         }
 
