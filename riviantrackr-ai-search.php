@@ -327,6 +327,15 @@ class AI_Search_Summary {
         }
     }
 
+    /**
+     * Check if API key is defined via constant.
+     *
+     * @return bool True if API key constant is defined and not empty.
+     */
+    public function is_api_key_from_constant() {
+        return defined( 'RT_AI_SEARCH_API_KEY' ) && ! empty( RT_AI_SEARCH_API_KEY );
+    }
+
     public function get_options() {
         if ( is_array( $this->options_cache ) ) {
             return $this->options_cache;
@@ -348,6 +357,11 @@ class AI_Search_Summary {
 
         $opts = get_option( $this->option_name, array() );
         $this->options_cache = wp_parse_args( is_array( $opts ) ? $opts : array(), $defaults );
+
+        // Override API key if defined via constant (more secure than database storage)
+        if ( $this->is_api_key_from_constant() ) {
+            $this->options_cache['api_key'] = RT_AI_SEARCH_API_KEY;
+        }
 
         return $this->options_cache;
     }
@@ -616,8 +630,17 @@ class AI_Search_Summary {
             wp_send_json_error( array( 'message' => 'Invalid nonce.' ) );
         }
 
-        // Get API key from POST
+        // Get API key - use constant if specified, otherwise from POST
         $api_key = isset( $_POST['api_key'] ) ? trim( $_POST['api_key'] ) : '';
+
+        if ( $api_key === '__USE_CONSTANT__' ) {
+            if ( $this->is_api_key_from_constant() ) {
+                $api_key = RT_AI_SEARCH_API_KEY;
+            } else {
+                wp_send_json_error( array( 'message' => 'API key constant is not defined.' ) );
+                return;
+            }
+        }
 
         // Test the key
         $result = $this->test_api_key( $api_key );
@@ -1130,20 +1153,39 @@ class AI_Search_Summary {
                                 <label for="rt-ai-api-key">OpenAI API Key</label>
                                 <span class="rt-ai-field-required">Required</span>
                             </div>
-                            <div class="rt-ai-field-description">
-                                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
-                            </div>
-                            <div class="rt-ai-field-input">
-                                <input type="password" 
-                                       id="rt-ai-api-key"
-                                       name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
-                                       value="<?php echo esc_attr( $options['api_key'] ); ?>"
-                                       placeholder="sk-proj-..." 
-                                       autocomplete="off" />
-                            </div>
+                            <?php if ( $this->is_api_key_from_constant() ) : ?>
+                                <div class="rt-ai-field-description" style="background: #d1fae5; border: 1px solid #10b981; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                                    <strong style="color: #065f46;">&#x1F512; Secure Mode:</strong>
+                                    API key is defined via <code>RT_AI_SEARCH_API_KEY</code> constant in wp-config.php.
+                                    <br><span style="color: #047857;">This is more secure than storing in the database.</span>
+                                </div>
+                                <div class="rt-ai-field-input">
+                                    <input type="password"
+                                           id="rt-ai-api-key"
+                                           value="<?php echo esc_attr( str_repeat( '•', 20 ) ); ?>"
+                                           disabled
+                                           style="background: #f3f4f6; cursor: not-allowed;" />
+                                    <input type="hidden"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                                           value="" />
+                                </div>
+                            <?php else : ?>
+                                <div class="rt-ai-field-description">
+                                    Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
+                                    <br><em style="color: #6b7280; font-size: 12px;">Tip: For better security, define <code>RT_AI_SEARCH_API_KEY</code> in wp-config.php instead.</em>
+                                </div>
+                                <div class="rt-ai-field-input">
+                                    <input type="password"
+                                           id="rt-ai-api-key"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
+                                           value="<?php echo esc_attr( $options['api_key'] ); ?>"
+                                           placeholder="sk-proj-..."
+                                           autocomplete="off" />
+                                </div>
+                            <?php endif; ?>
                             <div class="rt-ai-field-actions">
-                                <button type="button" 
-                                        id="rt-ai-test-key-btn" 
+                                <button type="button"
+                                        id="rt-ai-test-key-btn"
                                         class="rt-ai-button rt-ai-button-secondary">
                                     Test Connection
                                 </button>
@@ -1386,17 +1428,18 @@ class AI_Search_Summary {
             $(document).ready(function() {
                 $('#rt-ai-test-key-btn').on('click', function() {
                     var btn = $(this);
-                    var apiKey = $('#rt-ai-api-key').val().trim();
+                    var useConstant = <?php echo $this->is_api_key_from_constant() ? 'true' : 'false'; ?>;
+                    var apiKey = useConstant ? '__USE_CONSTANT__' : $('#rt-ai-api-key').val().trim();
                     var resultDiv = $('#rt-ai-test-result');
-                    
-                    if (!apiKey) {
+
+                    if (!useConstant && !apiKey) {
                         resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
                         return;
                     }
-                    
+
                     btn.prop('disabled', true).text('Testing...');
                     resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
-                    
+
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',

@@ -6,9 +6,9 @@ We release patches for security vulnerabilities for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 4.0.x   | :white_check_mark: |
 | 3.3.x   | :white_check_mark: |
-| 3.2.x   | :white_check_mark: |
-| < 3.2   | :x:                |
+| < 3.3   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -37,13 +37,36 @@ Include the following information:
 
 ### API Key Storage
 
-**Important**: OpenAI API keys are stored in the WordPress options table in **plain text**. 
+By default, OpenAI API keys are stored in the WordPress options table in plain text. For better security, we strongly recommend using a PHP constant instead.
 
-We recommend:
+#### Recommended: Define API Key in wp-config.php
+
+Add this line to your `wp-config.php` file (before "That's all, stop editing!"):
+
+```php
+define( 'RT_AI_SEARCH_API_KEY', 'sk-proj-your-api-key-here' );
+```
+
+**Benefits of using a constant:**
+- API key is not stored in the database (protected from SQL injection/database leaks)
+- Key is not visible in WordPress admin (protected from admin account compromise)
+- Easier to manage across environments (staging/production)
+- Can be set via server environment variables in hosting panels
+
+**Example using environment variables (advanced):**
+
+```php
+// In wp-config.php
+define( 'RT_AI_SEARCH_API_KEY', getenv('OPENAI_API_KEY') );
+```
+
+Then set `OPENAI_API_KEY` in your server's environment configuration.
+
+#### Additional Recommendations
+
 - Use a restricted API key with minimal permissions in OpenAI dashboard
 - Set usage limits in your OpenAI account
 - Regularly rotate API keys
-- Consider using environment variables for production deployments
 - Never commit API keys to version control
 
 ### Best Practices for Site Administrators
