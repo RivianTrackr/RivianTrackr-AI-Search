@@ -122,8 +122,12 @@
       if (cached.answer_html) {
         container.innerHTML = cached.answer_html;
       } else if (cached.error) {
-        container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">' +
-          document.createTextNode(cached.error).textContent + '</p>';
+        var errorP = document.createElement('p');
+        errorP.setAttribute('role', 'alert');
+        errorP.style.cssText = 'margin:0; opacity:0.8;';
+        errorP.textContent = String(cached.error);
+        container.innerHTML = '';
+        container.appendChild(errorP);
       }
       // Log session cache hit to analytics (fire and forget)
       logSessionCacheHit(q, cached.results_count);
