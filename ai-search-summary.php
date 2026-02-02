@@ -55,6 +55,7 @@ class AI_Search_Summary {
         // Register settings on admin_init (the recommended hook for Settings API)
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_init', array( $this, 'maybe_run_migrations' ) );
+        add_action( 'admin_init', array( $this, 'add_security_headers' ) );
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
@@ -68,6 +69,28 @@ class AI_Search_Summary {
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
+    }
+
+    /**
+     * Add security headers for plugin admin pages.
+     */
+    public function add_security_headers() {
+        // Only add headers on our plugin pages
+        if ( ! isset( $_GET['page'] ) || strpos( $_GET['page'], 'aiss' ) !== 0 ) {
+            return;
+        }
+
+        // Prevent MIME type sniffing
+        header( 'X-Content-Type-Options: nosniff' );
+
+        // Prevent clickjacking - allow same origin only
+        header( 'X-Frame-Options: SAMEORIGIN' );
+
+        // Control referrer information
+        header( 'Referrer-Policy: strict-origin-when-cross-origin' );
+
+        // Prevent XSS attacks in older browsers
+        header( 'X-XSS-Protection: 1; mode=block' );
     }
 
     public function add_plugin_settings_link( $links ) {
@@ -89,6 +112,16 @@ class AI_Search_Summary {
     private static function get_logs_table_name() {
         global $wpdb;
         return $wpdb->prefix . 'aiss_logs';
+    }
+
+    /**
+     * Get the logs table name with backtick escaping for use in queries.
+     * Note: Do not use with dbDelta() which requires unquoted table names.
+     *
+     * @return string Backtick-escaped table name.
+     */
+    private static function get_escaped_table_name() {
+        return '`' . self::get_logs_table_name() . '`';
     }
 
     private static function create_logs_table() {
@@ -119,6 +152,7 @@ class AI_Search_Summary {
     private static function add_missing_indexes() {
         global $wpdb;
         $table_name = self::get_logs_table_name();
+        $table_escaped = self::get_escaped_table_name();
 
         // Check if table exists
         $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
@@ -127,7 +161,7 @@ class AI_Search_Summary {
         }
 
         // Get existing indexes
-        $indexes = $wpdb->get_results( "SHOW INDEX FROM $table_name" );
+        $indexes = $wpdb->get_results( "SHOW INDEX FROM {$table_escaped}" );
         $index_names = array();
         foreach ( $indexes as $index ) {
             $index_names[] = $index->Key_name;
@@ -136,7 +170,7 @@ class AI_Search_Summary {
         // Add search_query_created index if missing
         if ( ! in_array( 'search_query_created', $index_names, true ) ) {
             $wpdb->query(
-                "ALTER TABLE $table_name
+                "ALTER TABLE {$table_escaped}
                  ADD INDEX search_query_created (search_query(100), created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -147,7 +181,7 @@ class AI_Search_Summary {
         // Add ai_success_created index if missing
         if ( ! in_array( 'ai_success_created', $index_names, true ) ) {
             $wpdb->query(
-                "ALTER TABLE $table_name
+                "ALTER TABLE {$table_escaped}
                  ADD INDEX ai_success_created (ai_success, created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -158,7 +192,7 @@ class AI_Search_Summary {
         // Add cache_hit_created index if missing
         if ( ! in_array( 'cache_hit_created', $index_names, true ) ) {
             $wpdb->query(
-                "ALTER TABLE $table_name
+                "ALTER TABLE {$table_escaped}
                  ADD INDEX cache_hit_created (cache_hit, created_at)"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -172,6 +206,7 @@ class AI_Search_Summary {
     private static function add_missing_columns() {
         global $wpdb;
         $table_name = self::get_logs_table_name();
+        $table_escaped = self::get_escaped_table_name();
 
         // Check if table exists
         $table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
@@ -180,7 +215,7 @@ class AI_Search_Summary {
         }
 
         // Get existing columns
-        $columns = $wpdb->get_results( "SHOW COLUMNS FROM $table_name" );
+        $columns = $wpdb->get_results( "SHOW COLUMNS FROM {$table_escaped}" );
         $column_names = array();
         foreach ( $columns as $column ) {
             $column_names[] = $column->Field;
@@ -189,7 +224,7 @@ class AI_Search_Summary {
         // Add cache_hit column if missing
         if ( ! in_array( 'cache_hit', $column_names, true ) ) {
             $wpdb->query(
-                "ALTER TABLE $table_name
+                "ALTER TABLE {$table_escaped}
                  ADD COLUMN cache_hit tinyint(1) NULL DEFAULT NULL AFTER ai_error"
             );
             if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -259,12 +294,12 @@ class AI_Search_Summary {
         }
 
         global $wpdb;
-        $table_name = self::get_logs_table_name();
+        $table_escaped = self::get_escaped_table_name();
         $cutoff_date = gmdate( 'Y-m-d H:i:s', time() - ( absint( $days ) * DAY_IN_SECONDS ) );
 
         $deleted = $wpdb->query(
             $wpdb->prepare(
-                "DELETE FROM $table_name WHERE created_at < %s",
+                "DELETE FROM {$table_escaped} WHERE created_at < %s",
                 $cutoff_date
             )
         );
@@ -1633,7 +1668,7 @@ class AI_Search_Summary {
 
     private function render_analytics_content() {
         global $wpdb;
-        $table_name = self::get_logs_table_name();
+        $table_escaped = self::get_escaped_table_name();
 
         // Get overview stats
         // cache_hit values: 0 = miss, 1 = server cache hit, 2 = session/browser cache hit
@@ -1644,7 +1679,7 @@ class AI_Search_Summary {
                 SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count,
                 SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
                 SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
-             FROM $table_name"
+             FROM {$table_escaped}"
         );
 
         $total_searches      = $totals ? (int) $totals->total : 0;
@@ -1657,13 +1692,13 @@ class AI_Search_Summary {
         $success_rate        = $this->calculate_success_rate( $success_count, $total_searches );
 
         $no_results_count = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM $table_name WHERE results_count = 0"
+            "SELECT COUNT(*) FROM {$table_escaped} WHERE results_count = 0"
         );
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
         $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
+                "SELECT COUNT(*) FROM {$table_escaped} WHERE created_at >= %s",
                 $since_24h
             )
         );
@@ -1675,7 +1710,7 @@ class AI_Search_Summary {
                 SUM(ai_success) AS success_count,
                 SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
                 SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
-             FROM $table_name
+             FROM {$table_escaped}
              GROUP BY DATE(created_at)
              ORDER BY day DESC
              LIMIT 14"
@@ -1683,7 +1718,7 @@ class AI_Search_Summary {
 
         $top_queries = $wpdb->get_results(
             "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM $table_name
+             FROM {$table_escaped}
              GROUP BY search_query
              ORDER BY total DESC
              LIMIT 20"
@@ -1691,7 +1726,7 @@ class AI_Search_Summary {
 
         $top_errors = $wpdb->get_results(
             "SELECT ai_error, COUNT(*) AS total
-             FROM $table_name
+             FROM {$table_escaped}
              WHERE ai_error IS NOT NULL AND ai_error <> ''
              GROUP BY ai_error
              ORDER BY total DESC
@@ -1700,7 +1735,7 @@ class AI_Search_Summary {
 
         $recent_events = $wpdb->get_results(
             "SELECT *
-             FROM $table_name
+             FROM {$table_escaped}
              ORDER BY created_at DESC
              LIMIT 50"
         );
@@ -2028,11 +2063,11 @@ class AI_Search_Summary {
         }
 
         global $wpdb;
-        $table_name = self::get_logs_table_name();
+        $table_escaped = self::get_escaped_table_name();
 
         $totals = $wpdb->get_row(
             "SELECT COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM $table_name"
+             FROM {$table_escaped}"
         );
 
         $total_searches = $totals ? (int) $totals->total : 0;
@@ -2042,14 +2077,14 @@ class AI_Search_Summary {
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
         $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
-                "SELECT COUNT(*) FROM $table_name WHERE created_at >= %s",
+                "SELECT COUNT(*) FROM {$table_escaped} WHERE created_at >= %s",
                 $since_24h
             )
         );
 
         $top_queries = $wpdb->get_results(
             "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM $table_name
+             FROM {$table_escaped}
              GROUP BY search_query
              ORDER BY total DESC
              LIMIT 5"
@@ -2270,20 +2305,67 @@ class AI_Search_Summary {
     }
 
     private function is_likely_bot() {
-        if ( ! isset( $_SERVER['HTTP_USER_AGENT'] ) ) {
-            return true; // No user agent = suspicious
+        // No user agent = definitely suspicious
+        if ( ! isset( $_SERVER['HTTP_USER_AGENT'] ) || empty( $_SERVER['HTTP_USER_AGENT'] ) ) {
+            return true;
         }
 
         $user_agent = strtolower( $_SERVER['HTTP_USER_AGENT'] );
-        
-        // Common bot patterns
+
+        // Very short user agents are suspicious (real browsers have long UA strings)
+        if ( strlen( $user_agent ) < 20 ) {
+            return true;
+        }
+
+        // Common bot patterns in user agent
         $bot_patterns = array(
             'bot', 'crawl', 'spider', 'slurp', 'scanner',
-            'scraper', 'curl', 'wget', 'python', 'java',
+            'scraper', 'curl', 'wget', 'python', 'java/',
+            'libwww', 'httpunit', 'nutch', 'phpcrawl',
+            'msnbot', 'adidxbot', 'blekkobot', 'teoma',
+            'gigabot', 'dotbot', 'yandex', 'seokicks',
+            'ahrefsbot', 'semrushbot', 'mj12bot', 'baiduspider',
+            'headless', 'phantom', 'selenium', 'puppeteer',
+            'playwright', 'webdriver', 'httpclient', 'okhttp',
+            'go-http-client', 'apache-httpclient', 'node-fetch',
+            'axios', 'request/', 'postman', 'insomnia',
         );
 
         foreach ( $bot_patterns as $pattern ) {
             if ( strpos( $user_agent, $pattern ) !== false ) {
+                return true;
+            }
+        }
+
+        // Check for missing standard browser headers
+        // Real browsers always send Accept-Language
+        if ( empty( $_SERVER['HTTP_ACCEPT_LANGUAGE'] ) ) {
+            return true;
+        }
+
+        // Real browsers send Accept header with text/html or */*
+        if ( empty( $_SERVER['HTTP_ACCEPT'] ) ) {
+            return true;
+        }
+
+        // Check for headless browser indicators
+        // Headless Chrome often has specific patterns
+        if ( strpos( $user_agent, 'headlesschrome' ) !== false ) {
+            return true;
+        }
+
+        // Check if user agent claims to be a browser but lacks typical browser headers
+        $claims_browser = (
+            strpos( $user_agent, 'mozilla' ) !== false ||
+            strpos( $user_agent, 'chrome' ) !== false ||
+            strpos( $user_agent, 'safari' ) !== false ||
+            strpos( $user_agent, 'firefox' ) !== false ||
+            strpos( $user_agent, 'edge' ) !== false
+        );
+
+        if ( $claims_browser ) {
+            // Browsers should have Accept-Encoding header
+            if ( empty( $_SERVER['HTTP_ACCEPT_ENCODING'] ) ) {
                 return true;
             }
         }
@@ -2760,7 +2842,11 @@ class AI_Search_Summary {
         );
 
         if ( isset( $api_response['error'] ) ) {
-            $ai_error = 'OpenAI API error: ' . $api_response['error'];
+            // Log detailed error for debugging, but show generic message to users
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[AI Search Summary] API error: ' . $api_response['error'] );
+            }
+            $ai_error = 'The AI service encountered an error. Please try again later.';
             return null;
         }
 
@@ -2790,12 +2876,16 @@ class AI_Search_Summary {
             }
             // Check if there's a finish_reason that explains the empty response
             $finish_reason = $api_response['choices'][0]['finish_reason'] ?? 'unknown';
+            // Log detailed reason for debugging
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[AI Search Summary] Empty response with finish_reason: ' . $finish_reason );
+            }
             if ( $finish_reason === 'content_filter' ) {
                 $ai_error = 'The response was filtered by content policy. Please try a different search.';
             } elseif ( $finish_reason === 'length' ) {
                 $ai_error = 'The response was truncated. Please try a simpler search.';
             } else {
-                $ai_error = 'OpenAI returned an empty response (reason: ' . $finish_reason . '). Please try again.';
+                $ai_error = 'AI summary is not available for this search. Please try again.';
             }
             return null;
         }
@@ -3025,9 +3115,10 @@ class AI_Search_Summary {
                 );
             }
 
+            // Generic message - detailed error already logged above
             return array(
                 'success'   => false,
-                'error'     => 'Connection error: ' . $error_msg,
+                'error'     => 'Could not connect to AI service. Please try again.',
                 'retryable' => true, // Most connection errors are worth retrying
             );
         }
@@ -3075,15 +3166,15 @@ class AI_Search_Summary {
             if ( $code === 400 ) {
                 return array(
                     'success'   => false,
-                    'error'     => $api_error ?? 'Bad request to AI service.',
+                    'error'     => 'The request could not be processed. Please try a different search.',
                     'retryable' => false,
                 );
             }
 
-            // Other errors
+            // Other errors - details already logged above
             return array(
                 'success'   => false,
-                'error'     => $api_error ?? 'API error (HTTP ' . $code . '). Please try again later.',
+                'error'     => 'AI service error. Please try again later.',
                 'retryable' => false,
             );
         }
