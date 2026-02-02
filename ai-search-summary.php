@@ -10,25 +10,25 @@ declare(strict_types=1);
  */
 
 define( 'AI_SEARCH_VERSION', '4.0.1' );
-define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
-define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
-define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
-define( 'RT_AI_SEARCH_DEFAULT_CACHE_TTL', 3600 );
-define( 'RT_AI_SEARCH_CONTENT_LENGTH', 400 );
-define( 'RT_AI_SEARCH_EXCERPT_LENGTH', 200 );
-define( 'RT_AI_SEARCH_MAX_SOURCES_DISPLAY', 5 );
-define( 'RT_AI_SEARCH_API_TIMEOUT', 60 );
-define( 'RT_AI_SEARCH_RATE_LIMIT_WINDOW', 70 );
-define( 'RT_AI_SEARCH_MAX_TOKENS', 1500 );
-define( 'RT_AI_SEARCH_IP_RATE_LIMIT', 10 ); // Requests per minute per IP
+define( 'AISS_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
+define( 'AISS_MIN_CACHE_TTL', 60 );
+define( 'AISS_MAX_CACHE_TTL', 86400 );
+define( 'AISS_DEFAULT_CACHE_TTL', 3600 );
+define( 'AISS_CONTENT_LENGTH', 400 );
+define( 'AISS_EXCERPT_LENGTH', 200 );
+define( 'AISS_MAX_SOURCES_DISPLAY', 5 );
+define( 'AISS_API_TIMEOUT', 60 );
+define( 'AISS_RATE_LIMIT_WINDOW', 70 );
+define( 'AISS_MAX_TOKENS', 1500 );
+define( 'AISS_IP_RATE_LIMIT', 10 ); // Requests per minute per IP
 
 // Error codes for structured API responses
-define( 'RT_AI_ERROR_BOT_DETECTED', 'bot_detected' );
-define( 'RT_AI_ERROR_RATE_LIMITED', 'rate_limited' );
-define( 'RT_AI_ERROR_NOT_CONFIGURED', 'not_configured' );
-define( 'RT_AI_ERROR_INVALID_QUERY', 'invalid_query' );
-define( 'RT_AI_ERROR_API_ERROR', 'api_error' );
-define( 'RT_AI_ERROR_NO_RESULTS', 'no_results' );
+define( 'AISS_ERROR_BOT_DETECTED', 'bot_detected' );
+define( 'AISS_ERROR_RATE_LIMITED', 'rate_limited' );
+define( 'AISS_ERROR_NOT_CONFIGURED', 'not_configured' );
+define( 'AISS_ERROR_INVALID_QUERY', 'invalid_query' );
+define( 'AISS_ERROR_API_ERROR', 'api_error' );
+define( 'AISS_ERROR_NO_RESULTS', 'no_results' );
 
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -37,10 +37,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class AI_Search_Summary {
 
-    private $option_name         = 'rt_ai_search_options';
-    private $models_cache_option = 'rt_ai_search_models_cache';
-    private $cache_keys_option      = 'rt_ai_search_cache_keys';
-    private $cache_namespace_option = 'rt_ai_search_cache_namespace';
+    private $option_name         = 'aiss_options';
+    private $models_cache_option = 'aiss_models_cache';
+    private $cache_keys_option      = 'aiss_cache_keys';
+    private $cache_namespace_option = 'aiss_cache_namespace';
     private $cache_prefix;
     private $cache_ttl           = 3600;
 
@@ -50,7 +50,7 @@ class AI_Search_Summary {
 
     public function __construct() {
 
-        $this->cache_prefix = 'rt_ai_search_v' . str_replace( '.', '_', AI_SEARCH_VERSION ) . '_';
+        $this->cache_prefix = 'aiss_v' . str_replace( '.', '_', AI_SEARCH_VERSION ) . '_';
 
         // Register settings on admin_init (the recommended hook for Settings API)
         add_action( 'admin_init', array( $this, 'register_settings' ) );
@@ -61,9 +61,9 @@ class AI_Search_Summary {
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_filter( 'rest_post_dispatch', array( $this, 'add_rate_limit_headers' ), 10, 3 );
-        add_action( 'wp_ajax_rt_ai_test_api_key', array( $this, 'ajax_test_api_key' ) );
-        add_action( 'wp_ajax_rt_ai_refresh_models', array( $this, 'ajax_refresh_models' ) );
-        add_action( 'wp_ajax_rt_ai_clear_cache', array( $this, 'ajax_clear_cache' ) );
+        add_action( 'wp_ajax_aiss_test_api_key', array( $this, 'ajax_test_api_key' ) );
+        add_action( 'wp_ajax_aiss_refresh_models', array( $this, 'ajax_refresh_models' ) );
+        add_action( 'wp_ajax_aiss_clear_cache', array( $this, 'ajax_clear_cache' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
@@ -71,7 +71,7 @@ class AI_Search_Summary {
     }
 
     public function add_plugin_settings_link( $links ) {
-        $url = admin_url( 'admin.php?page=rt-ai-search-settings' );
+        $url = admin_url( 'admin.php?page=aiss-settings' );
         $settings_link = '<a href="' . esc_url( $url ) . '">Settings</a>';
         array_unshift( $links, $settings_link );
         return $links;
@@ -79,8 +79,8 @@ class AI_Search_Summary {
 
     public function enqueue_dashboard_widget_css() {
         wp_enqueue_style(
-            'rt-ai-search-admin',
-            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
+            'aiss-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/aiss-admin.css',
             array(),
             AI_SEARCH_VERSION
         );
@@ -88,7 +88,7 @@ class AI_Search_Summary {
 
     private static function get_logs_table_name() {
         global $wpdb;
-        return $wpdb->prefix . 'rt_ai_search_logs';
+        return $wpdb->prefix . 'aiss_logs';
     }
 
     private static function create_logs_table() {
@@ -219,13 +219,13 @@ class AI_Search_Summary {
      * Called on admin_init to ensure schema is up to date.
      */
     public function maybe_run_migrations() {
-        $db_version = get_option( 'rt_ai_search_db_version', '1.0' );
+        $db_version = get_option( 'aiss_db_version', '1.0' );
 
         // Version 1.1 adds cache_hit column
         if ( version_compare( $db_version, '1.1', '<' ) ) {
             self::add_missing_columns();
             self::add_missing_indexes();
-            update_option( 'rt_ai_search_db_version', '1.1' );
+            update_option( 'aiss_db_version', '1.1' );
         }
     }
 
@@ -333,7 +333,7 @@ class AI_Search_Summary {
      * @return bool True if API key constant is defined and not empty.
      */
     public function is_api_key_from_constant() {
-        return defined( 'RT_AI_SEARCH_API_KEY' ) && ! empty( RT_AI_SEARCH_API_KEY );
+        return defined( 'AISS_API_KEY' ) && ! empty( AISS_API_KEY );
     }
 
     public function get_options() {
@@ -347,7 +347,7 @@ class AI_Search_Summary {
             'max_posts'            => 20,
             'enable'               => 0,
             'max_calls_per_minute' => 30,
-            'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+            'cache_ttl'            => AISS_DEFAULT_CACHE_TTL,
             'request_timeout'      => 60,
             'site_name'            => get_bloginfo( 'name' ),
             'site_description'     => '',
@@ -360,7 +360,7 @@ class AI_Search_Summary {
 
         // Override API key if defined via constant (more secure than database storage)
         if ( $this->is_api_key_from_constant() ) {
-            $this->options_cache['api_key'] = RT_AI_SEARCH_API_KEY;
+            $this->options_cache['api_key'] = AISS_API_KEY;
         }
 
         return $this->options_cache;
@@ -385,14 +385,14 @@ class AI_Search_Summary {
             
         if (isset($input['cache_ttl'])) {
             $ttl = intval($input['cache_ttl']);
-            if ($ttl < RT_AI_SEARCH_MIN_CACHE_TTL) {
-                $ttl = RT_AI_SEARCH_MIN_CACHE_TTL;
-            } elseif ($ttl > RT_AI_SEARCH_MAX_CACHE_TTL) {
-                $ttl = RT_AI_SEARCH_MAX_CACHE_TTL;
+            if ($ttl < AISS_MIN_CACHE_TTL) {
+                $ttl = AISS_MIN_CACHE_TTL;
+            } elseif ($ttl > AISS_MAX_CACHE_TTL) {
+                $ttl = AISS_MAX_CACHE_TTL;
             }
             $output['cache_ttl'] = $ttl;
         } else {
-            $output['cache_ttl'] = RT_AI_SEARCH_DEFAULT_CACHE_TTL;
+            $output['cache_ttl'] = AISS_DEFAULT_CACHE_TTL;
         }
 
         // Request timeout: min 10 seconds, max 120 seconds, default 60
@@ -483,7 +483,7 @@ class AI_Search_Summary {
 
     public function add_settings_page() {
         $capability  = 'manage_options';
-        $parent_slug = 'rt-ai-search-settings';
+        $parent_slug = 'aiss-settings';
 
         add_menu_page(
             'AI Search',
@@ -509,14 +509,14 @@ class AI_Search_Summary {
             'AI Search Analytics',
             'Analytics',
             $capability,
-            'rt-ai-search-analytics',
+            'aiss-analytics',
             array( $this, 'render_analytics_page' )
         );
     }
 
     public function register_settings() {
         register_setting(
-            'rt_ai_search_group',
+            'aiss_group',
             $this->option_name,
             array(
                 'type' => 'array',
@@ -527,7 +527,7 @@ class AI_Search_Summary {
                     'max_posts'            => 20,
                     'enable'               => 0,
                     'max_calls_per_minute' => 30,
-                    'cache_ttl'            => RT_AI_SEARCH_DEFAULT_CACHE_TTL,
+                    'cache_ttl'            => AISS_DEFAULT_CACHE_TTL,
                     'request_timeout'      => 60,
                     'site_name'            => '',
                     'site_description'     => '',
@@ -626,7 +626,7 @@ class AI_Search_Summary {
         }
 
         // Verify nonce
-        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_test_key' ) ) {
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'aiss_test_key' ) ) {
             wp_send_json_error( array( 'message' => 'Invalid nonce.' ) );
         }
 
@@ -635,7 +635,7 @@ class AI_Search_Summary {
 
         if ( $api_key === '__USE_CONSTANT__' ) {
             if ( $this->is_api_key_from_constant() ) {
-                $api_key = RT_AI_SEARCH_API_KEY;
+                $api_key = AISS_API_KEY;
             } else {
                 wp_send_json_error( array( 'message' => 'API key constant is not defined.' ) );
                 return;
@@ -657,7 +657,7 @@ class AI_Search_Summary {
             wp_send_json_error( array( 'message' => 'Permission denied.' ) );
         }
 
-        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_refresh_models' ) ) {
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'aiss_refresh_models' ) ) {
             wp_send_json_error( array( 'message' => 'Invalid security token. Please refresh the page.' ) );
         }
 
@@ -679,7 +679,7 @@ class AI_Search_Summary {
             wp_send_json_error( array( 'message' => 'Permission denied.' ) );
         }
 
-        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'rt_ai_clear_cache' ) ) {
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'aiss_clear_cache' ) ) {
             wp_send_json_error( array( 'message' => 'Invalid security token. Please refresh the page.' ) );
         }
 
@@ -695,14 +695,14 @@ class AI_Search_Summary {
         $options = $this->get_options();
         $custom_css = isset( $options['custom_css'] ) ? $options['custom_css'] : '';
         ?>
-        <div class="rt-ai-css-editor-wrapper">
+        <div class="aiss-css-editor-wrapper">
             <textarea 
                 name="<?php echo esc_attr( $this->option_name ); ?>[custom_css]"
-                id="rt-ai-custom-css"
-                class="rt-ai-css-editor"
+                id="aiss-custom-css"
+                class="aiss-css-editor"
                 rows="15"
                 placeholder="/* Add your custom CSS here */
-    .rt-ai-search-summary {
+    .aiss-summary {
         /* Your custom styles */
     }"><?php echo esc_textarea( $custom_css ); ?></textarea>
         </div>
@@ -710,27 +710,27 @@ class AI_Search_Summary {
         <p class="description">
             Add custom CSS to style the AI search summary. This will override the default styles.
             <br>
-            <strong>Tip:</strong> Target classes like <code>.rt-ai-search-summary</code>, <code>.rt-ai-search-summary-inner</code>, <code>.rt-ai-openai-badge</code>, etc.
+            <strong>Tip:</strong> Target classes like <code>.aiss-summary</code>, <code>.aiss-summary-inner</code>, <code>.aiss-openai-badge</code>, etc.
         </p>
         
-        <div class="rt-ai-css-buttons">
-            <button type="button" id="rt-ai-reset-css" class="rt-ai-button rt-ai-button-secondary">
+        <div class="aiss-css-buttons">
+            <button type="button" id="aiss-reset-css" class="aiss-button aiss-button-secondary">
                 Reset to Empty
             </button>
-            <button type="button" id="rt-ai-view-default-css" class="rt-ai-button rt-ai-button-secondary">
+            <button type="button" id="aiss-view-default-css" class="aiss-button aiss-button-secondary">
                 View Default CSS
             </button>
         </div>
         
         <!-- Modal HTML -->
-        <div id="rt-ai-default-css-modal" class="rt-ai-modal-overlay">
-            <div class="rt-ai-modal-content">
-                <button type="button" id="rt-ai-close-modal" class="rt-ai-modal-close" aria-label="Close">×</button>
-                <h2 class="rt-ai-modal-header">Default CSS Reference</h2>
-                <p class="rt-ai-modal-description">
+        <div id="aiss-default-css-modal" class="aiss-modal-overlay">
+            <div class="aiss-modal-content">
+                <button type="button" id="aiss-close-modal" class="aiss-modal-close" aria-label="Close">×</button>
+                <h2 class="aiss-modal-header">Default CSS Reference</h2>
+                <p class="aiss-modal-description">
                     Copy and modify these default styles to customize your AI search summary.
                 </p>
-                <pre class="rt-ai-modal-code"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
+                <pre class="aiss-modal-code"><code><?php echo esc_html( $this->get_default_css() ); ?></code></pre>
             </div>
         </div>
         
@@ -738,37 +738,37 @@ class AI_Search_Summary {
         <script>
         (function($) {
             $(document).ready(function() {
-                var modal = $('#rt-ai-default-css-modal');
-                var textarea = $('#rt-ai-custom-css');
+                var modal = $('#aiss-default-css-modal');
+                var textarea = $('#aiss-custom-css');
                 
                 // Reset CSS
-                $('#rt-ai-reset-css').on('click', function() {
+                $('#aiss-reset-css').on('click', function() {
                     if (confirm('Reset custom CSS? This will clear all your custom styles.')) {
                         textarea.val('');
                     }
                 });
                 
                 // View default CSS
-                $('#rt-ai-view-default-css').on('click', function() {
-                    modal.addClass('rt-ai-modal-open');
+                $('#aiss-view-default-css').on('click', function() {
+                    modal.addClass('aiss-modal-open');
                 });
                 
                 // Close modal - X button
-                $('#rt-ai-close-modal').on('click', function() {
-                    modal.removeClass('rt-ai-modal-open');
+                $('#aiss-close-modal').on('click', function() {
+                    modal.removeClass('aiss-modal-open');
                 });
                 
                 // Close on background click
                 modal.on('click', function(e) {
                     if (e.target === this) {
-                        modal.removeClass('rt-ai-modal-open');
+                        modal.removeClass('aiss-modal-open');
                     }
                 });
                 
                 // Close on ESC key
                 $(document).on('keydown', function(e) {
-                    if (e.key === 'Escape' && modal.hasClass('rt-ai-modal-open')) {
-                        modal.removeClass('rt-ai-modal-open');
+                    if (e.key === 'Escape' && modal.hasClass('aiss-modal-open')) {
+                        modal.removeClass('aiss-modal-open');
                     }
                 });
             });
@@ -778,38 +778,38 @@ class AI_Search_Summary {
     }
 
     private function get_default_css() {
-        return '@keyframes rt-ai-spin {
+        return '@keyframes aiss-spin {
   to { transform: rotate(360deg); }
 }
 
-.rt-ai-search-summary-content {
+.aiss-summary-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
-.rt-ai-spinner {
+.aiss-spinner {
   width: 14px;
   height: 14px;
   border-radius: 50%;
   border: 2px solid rgba(148,163,184,0.5);
   border-top-color: #22c55e;
   display: inline-block;
-  animation: rt-ai-spin 0.7s linear infinite;
+  animation: aiss-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
 
-.rt-ai-loading-text {
+.aiss-loading-text {
   margin: 0;
   opacity: 0.8;
 }
 
-.rt-ai-search-summary-content.rt-ai-loaded {
+.aiss-summary-content.aiss-loaded {
   display: block;
 }
 
-.rt-ai-openai-badge {
+.aiss-openai-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -824,7 +824,7 @@ class AI_Search_Summary {
   opacity: 0.95;
 }
 
-.rt-ai-openai-mark {
+.aiss-openai-mark {
   width: 10px;
   height: 10px;
   border-radius: 999px;
@@ -833,7 +833,7 @@ class AI_Search_Summary {
   flex-shrink: 0;
 }
 
-.rt-ai-openai-mark::after {
+.aiss-openai-mark::after {
   content: "";
   position: absolute;
   inset: 2px;
@@ -841,12 +841,12 @@ class AI_Search_Summary {
   background: linear-gradient(135deg,#22c55e,#3b82f6);
 }
 
-.rt-ai-sources {
+.aiss-sources {
   margin-top: 1rem;
   font-size: 0.85rem;
 }
 
-.rt-ai-sources-toggle {
+.aiss-sources-toggle {
   border: none;
   background: none;
   padding: 0;
@@ -859,31 +859,31 @@ class AI_Search_Summary {
   color: #e5e7eb;
 }
 
-.rt-ai-sources-list {
+.aiss-sources-list {
   margin: 0;
   padding-left: 1.1rem;
   font-size: 0.85rem;
 }
 
-.rt-ai-sources-list li {
+.aiss-sources-list li {
   margin-bottom: 0.4rem;
 }
 
-.rt-ai-sources-list li:last-child {
+.aiss-sources-list li:last-child {
   margin-bottom: 0;
 }
 
-.rt-ai-sources-list a {
+.aiss-sources-list a {
   color: #22c55e;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.rt-ai-sources-list a:hover {
+.aiss-sources-list a:hover {
   opacity: 0.9;
 }
 
-.rt-ai-sources-list span {
+.aiss-sources-list span {
   display: block;
   opacity: 0.8;
   color: #cbd5f5;
@@ -986,7 +986,7 @@ class AI_Search_Summary {
         // Use cached models if they exist and are still within TTL.
         if ( ! empty( $cached_models ) && $updated_at > 0 ) {
             $age = time() - $updated_at;
-            if ( $age >= 0 && $age < RT_AI_SEARCH_MODELS_CACHE_TTL ) {
+            if ( $age >= 0 && $age < AISS_MODELS_CACHE_TTL ) {
                 return $cached_models;
             }
         }
@@ -1082,19 +1082,19 @@ class AI_Search_Summary {
         $setup_complete = $has_api_key && $is_enabled;
         ?>
         
-        <div class="rt-ai-settings-wrap">
+        <div class="aiss-settings-wrap">
             <!-- Header -->
-            <div class="rt-ai-header">
+            <div class="aiss-header">
                 <h1>AI Search Settings</h1>
                 <p>Configure OpenAI-powered search summaries for your site.</p>
             </div>
 
             <!-- Status Card -->
-            <div class="rt-ai-status-card <?php echo $setup_complete ? 'active' : ''; ?>">
-                <div class="rt-ai-status-icon">
+            <div class="aiss-status-card <?php echo $setup_complete ? 'active' : ''; ?>">
+                <div class="aiss-status-icon">
                     <?php echo $setup_complete ? '✓' : '○'; ?>
                 </div>
-                <div class="rt-ai-status-content">
+                <div class="aiss-status-content">
                     <h3><?php echo $setup_complete ? 'AI Search Active' : 'Setup Required'; ?></h3>
                     <p>
                         <?php 
@@ -1112,56 +1112,56 @@ class AI_Search_Summary {
 
             <?php
             // WordPress settings API handles success/error messages automatically
-            settings_errors( 'rt_ai_search_group' );
+            settings_errors( 'aiss_group' );
             ?>
 
             <form method="post" action="options.php">
-                <?php settings_fields( 'rt_ai_search_group' ); ?>
+                <?php settings_fields( 'aiss_group' ); ?>
 
                 <!-- Section 1: Getting Started (Most Important) -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
                         <h2>Getting Started</h2>
                         <p>Essential settings to enable AI search</p>
                     </div>
-                    <div class="rt-ai-section-content">
+                    <div class="aiss-section-content">
                         <!-- Enable Toggle -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>AI Search</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Enable or disable AI-powered search summaries site-wide
                             </div>
-                            <div class="rt-ai-toggle-wrapper">
-                                <label class="rt-ai-toggle">
+                            <div class="aiss-toggle-wrapper">
+                                <label class="aiss-toggle">
                                     <input type="checkbox" 
                                            name="<?php echo esc_attr( $this->option_name ); ?>[enable]"
                                            value="1" 
                                            <?php checked( $options['enable'], 1 ); ?> />
-                                    <span class="rt-ai-toggle-slider"></span>
+                                    <span class="aiss-toggle-slider"></span>
                                 </label>
-                                <span class="rt-ai-toggle-label">
+                                <span class="aiss-toggle-label">
                                     <?php echo $options['enable'] ? 'Enabled' : 'Disabled'; ?>
                                 </span>
                             </div>
                         </div>
 
                         <!-- API Key -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label for="rt-ai-api-key">OpenAI API Key</label>
-                                <span class="rt-ai-field-required">Required</span>
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label for="aiss-api-key">OpenAI API Key</label>
+                                <span class="aiss-field-required">Required</span>
                             </div>
                             <?php if ( $this->is_api_key_from_constant() ) : ?>
-                                <div class="rt-ai-field-description" style="background: #d1fae5; border: 1px solid #10b981; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                                <div class="aiss-field-description" style="background: #d1fae5; border: 1px solid #10b981; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
                                     <strong style="color: #065f46;">&#x1F512; Secure Mode:</strong>
-                                    API key is defined via <code>RT_AI_SEARCH_API_KEY</code> constant in wp-config.php.
+                                    API key is defined via <code>AISS_API_KEY</code> constant in wp-config.php.
                                     <br><span style="color: #047857;">This is more secure than storing in the database.</span>
                                 </div>
-                                <div class="rt-ai-field-input">
+                                <div class="aiss-field-input">
                                     <input type="password"
-                                           id="rt-ai-api-key"
+                                           id="aiss-api-key"
                                            value="<?php echo esc_attr( str_repeat( '•', 20 ) ); ?>"
                                            disabled
                                            style="background: #f3f4f6; cursor: not-allowed;" />
@@ -1170,49 +1170,49 @@ class AI_Search_Summary {
                                            value="" />
                                 </div>
                             <?php else : ?>
-                                <div class="rt-ai-field-description">
+                                <div class="aiss-field-description">
                                     Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
-                                    <br><em style="color: #6b7280; font-size: 12px;">Tip: For better security, define <code>RT_AI_SEARCH_API_KEY</code> in wp-config.php instead.</em>
+                                    <br><em style="color: #6b7280; font-size: 12px;">Tip: For better security, define <code>AISS_API_KEY</code> in wp-config.php instead.</em>
                                 </div>
-                                <div class="rt-ai-field-input">
+                                <div class="aiss-field-input">
                                     <input type="password"
-                                           id="rt-ai-api-key"
+                                           id="aiss-api-key"
                                            name="<?php echo esc_attr( $this->option_name ); ?>[api_key]"
                                            value="<?php echo esc_attr( $options['api_key'] ); ?>"
                                            placeholder="sk-proj-..."
                                            autocomplete="off" />
                                 </div>
                             <?php endif; ?>
-                            <div class="rt-ai-field-actions">
+                            <div class="aiss-field-actions">
                                 <button type="button"
-                                        id="rt-ai-test-key-btn"
-                                        class="rt-ai-button rt-ai-button-secondary">
+                                        id="aiss-test-key-btn"
+                                        class="aiss-button aiss-button-secondary">
                                     Test Connection
                                 </button>
                             </div>
-                            <div id="rt-ai-test-result" style="margin-top: 12px;"></div>
+                            <div id="aiss-test-result" style="margin-top: 12px;"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Section: Site Configuration -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
                         <h2>Site Configuration</h2>
                         <p>Configure how your site is described to the AI</p>
                     </div>
-                    <div class="rt-ai-section-content">
+                    <div class="aiss-section-content">
                         <!-- Site Name -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label for="rt-ai-site-name">Site Name</label>
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label for="aiss-site-name">Site Name</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 The name of your site (used in AI responses and loading text)
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="text"
-                                       id="rt-ai-site-name"
+                                       id="aiss-site-name"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[site_name]"
                                        value="<?php echo esc_attr( isset( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' ) ); ?>"
                                        placeholder="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>" />
@@ -1220,16 +1220,16 @@ class AI_Search_Summary {
                         </div>
 
                         <!-- Site Description -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
-                                <label for="rt-ai-site-description">Site Description</label>
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label for="aiss-site-description">Site Description</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Describe your site's focus/niche (e.g., "a technology news site" or "a cooking and recipe blog"). This helps the AI understand context.
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="text"
-                                       id="rt-ai-site-description"
+                                       id="aiss-site-description"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[site_description]"
                                        value="<?php echo esc_attr( isset( $options['site_description'] ) ? $options['site_description'] : '' ); ?>"
                                        placeholder="e.g., a technology news and reviews site" />
@@ -1237,22 +1237,22 @@ class AI_Search_Summary {
                         </div>
 
                         <!-- Show OpenAI Badge -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Show "Powered by OpenAI" Badge</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Display the OpenAI attribution badge on search summaries
                             </div>
-                            <div class="rt-ai-toggle-wrapper">
-                                <label class="rt-ai-toggle">
+                            <div class="aiss-toggle-wrapper">
+                                <label class="aiss-toggle">
                                     <input type="checkbox"
                                            name="<?php echo esc_attr( $this->option_name ); ?>[show_openai_badge]"
                                            value="1"
                                            <?php checked( isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1, 1 ); ?> />
-                                    <span class="rt-ai-toggle-slider"></span>
+                                    <span class="aiss-toggle-slider"></span>
                                 </label>
-                                <span class="rt-ai-toggle-label">
+                                <span class="aiss-toggle-label">
                                     <?php echo ( isset( $options['show_openai_badge'] ) && $options['show_openai_badge'] ) ? 'Visible' : 'Hidden'; ?>
                                 </span>
                             </div>
@@ -1261,18 +1261,18 @@ class AI_Search_Summary {
                 </div>
 
                 <!-- Section 2: AI Configuration -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
                         <h2>AI Configuration</h2>
                         <p>Customize how AI generates search summaries</p>
                     </div>
-                    <div class="rt-ai-section-content">
+                    <div class="aiss-section-content">
                         <!-- Model Selection -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>AI Model</label>
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <?php
                                 $models = $this->get_available_models_for_dropdown( $options['api_key'] );
                                 if ( ! empty( $options['model'] ) && ! in_array( $options['model'], $models, true ) ) {
@@ -1290,13 +1290,13 @@ class AI_Search_Summary {
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="rt-ai-field-actions">
-                                <button type="button" id="rt-ai-refresh-models-btn"
-                                        class="rt-ai-button rt-ai-button-secondary"
-                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'rt_ai_refresh_models' ) ); ?>">
+                            <div class="aiss-field-actions">
+                                <button type="button" id="aiss-refresh-models-btn"
+                                        class="aiss-button aiss-button-secondary"
+                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'aiss_refresh_models' ) ); ?>">
                                     Refresh Models
                                 </button>
-                                <span id="rt-ai-refresh-models-result" style="margin-left: 12px;"></span>
+                                <span id="aiss-refresh-models-result" style="margin-left: 12px;"></span>
                             </div>
                             <?php if ( is_array( $cache ) && ! empty( $cache['updated_at'] ) ) : ?>
                                 <div style="margin-top: 8px; font-size: 13px; color: #86868b;">
@@ -1306,14 +1306,14 @@ class AI_Search_Summary {
                         </div>
 
                         <!-- Max Posts -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Context Size</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Number of posts to send as context (more posts = better answers, higher cost)
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="number" 
                                        name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
                                        value="<?php echo esc_attr( $options['max_posts'] ); ?>"
@@ -1325,21 +1325,21 @@ class AI_Search_Summary {
                 </div>
 
                 <!-- Section 3: Performance -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
                         <h2>Performance</h2>
                         <p>Control rate limits and caching behavior</p>
                     </div>
-                    <div class="rt-ai-section-content">
+                    <div class="aiss-section-content">
                         <!-- Cache TTL -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Cache Duration</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 How long to cache AI summaries (60 seconds to 24 hours)
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="number"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[cache_ttl]"
                                        value="<?php echo esc_attr( isset( $options['cache_ttl'] ) ? $options['cache_ttl'] : 3600 ); ?>"
@@ -1348,25 +1348,25 @@ class AI_Search_Summary {
                                        step="60" />
                                 <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
                             </div>
-                            <div class="rt-ai-field-actions">
-                                <button type="button" id="rt-ai-clear-cache-btn"
-                                        class="rt-ai-button rt-ai-button-secondary"
-                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'rt_ai_clear_cache' ) ); ?>">
+                            <div class="aiss-field-actions">
+                                <button type="button" id="aiss-clear-cache-btn"
+                                        class="aiss-button aiss-button-secondary"
+                                        data-nonce="<?php echo esc_attr( wp_create_nonce( 'aiss_clear_cache' ) ); ?>">
                                     Clear Cache Now
                                 </button>
-                                <span id="rt-ai-clear-cache-result" style="margin-left: 12px;"></span>
+                                <span id="aiss-clear-cache-result" style="margin-left: 12px;"></span>
                             </div>
                         </div>
 
                         <!-- Rate Limit -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Rate Limit</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Maximum AI calls per minute across the entire site (0 = unlimited)
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="number"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[max_calls_per_minute]"
                                        value="<?php echo esc_attr( isset( $options['max_calls_per_minute'] ) ? $options['max_calls_per_minute'] : 30 ); ?>"
@@ -1377,14 +1377,14 @@ class AI_Search_Summary {
                         </div>
 
                         <!-- Request Timeout -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Request Timeout</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 How long to wait for AI response before timing out (10-120 seconds). Increase for slower reasoning models.
                             </div>
-                            <div class="rt-ai-field-input">
+                            <div class="aiss-field-input">
                                 <input type="number"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[request_timeout]"
                                        value="<?php echo esc_attr( isset( $options['request_timeout'] ) ? $options['request_timeout'] : 60 ); ?>"
@@ -1398,18 +1398,18 @@ class AI_Search_Summary {
                 </div>
 
                 <!-- Section 4: Appearance -->
-                <div class="rt-ai-section">
-                    <div class="rt-ai-section-header">
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
                         <h2>Appearance</h2>
                         <p>Customize how the AI search summary looks on your site</p>
                     </div>
-                    <div class="rt-ai-section-content">
+                    <div class="aiss-section-content">
                         <!-- Custom CSS Only -->
-                        <div class="rt-ai-field">
-                            <div class="rt-ai-field-label">
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
                                 <label>Custom CSS</label>
                             </div>
-                            <div class="rt-ai-field-description">
+                            <div class="aiss-field-description">
                                 Override default styles with your own CSS for complete control
                             </div>
                             <?php $this->field_custom_css(); ?>
@@ -1417,8 +1417,8 @@ class AI_Search_Summary {
                     </div>
                 </div>
 
-                <div class="rt-ai-footer-actions">
-                    <?php submit_button( 'Save Settings', 'primary rt-ai-button rt-ai-button-primary', 'submit', false ); ?>
+                <div class="aiss-footer-actions">
+                    <?php submit_button( 'Save Settings', 'primary aiss-button aiss-button-primary', 'submit', false ); ?>
                 </div>
             </form>
         </div>
@@ -1426,27 +1426,27 @@ class AI_Search_Summary {
         <script>
         (function($) {
             $(document).ready(function() {
-                $('#rt-ai-test-key-btn').on('click', function() {
+                $('#aiss-test-key-btn').on('click', function() {
                     var btn = $(this);
                     var useConstant = <?php echo $this->is_api_key_from_constant() ? 'true' : 'false'; ?>;
-                    var apiKey = useConstant ? '__USE_CONSTANT__' : $('#rt-ai-api-key').val().trim();
-                    var resultDiv = $('#rt-ai-test-result');
+                    var apiKey = useConstant ? '__USE_CONSTANT__' : $('#aiss-api-key').val().trim();
+                    var resultDiv = $('#aiss-test-result');
 
                     if (!useConstant && !apiKey) {
-                        resultDiv.html('<div class="rt-ai-test-result error"><p>Please enter an API key first.</p></div>');
+                        resultDiv.html('<div class="aiss-test-result error"><p>Please enter an API key first.</p></div>');
                         return;
                     }
 
                     btn.prop('disabled', true).text('Testing...');
-                    resultDiv.html('<div class="rt-ai-test-result info"><p>Testing API key...</p></div>');
+                    resultDiv.html('<div class="aiss-test-result info"><p>Testing API key...</p></div>');
 
                     $.ajax({
                         url: ajaxurl,
                         type: 'POST',
                         data: {
-                            action: 'rt_ai_test_api_key',
+                            action: 'aiss_test_api_key',
                             api_key: apiKey,
-                            nonce: '<?php echo wp_create_nonce( 'rt_ai_test_key' ); ?>'
+                            nonce: '<?php echo wp_create_nonce( 'aiss_test_key' ); ?>'
                         },
                         success: function(response) {
                             btn.prop('disabled', false).text('Test Connection');
@@ -1456,22 +1456,22 @@ class AI_Search_Summary {
                                 if (response.data.model_count) {
                                     msg += '<br>Available models: ' + response.data.model_count + ' (Chat models: ' + response.data.chat_models + ')';
                                 }
-                                resultDiv.html('<div class="rt-ai-test-result success"><p>' + msg + '</p></div>');
+                                resultDiv.html('<div class="aiss-test-result success"><p>' + msg + '</p></div>');
                             } else {
-                                resultDiv.html('<div class="rt-ai-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
+                                resultDiv.html('<div class="aiss-test-result error"><p><strong>✗ Test failed:</strong> ' + response.data.message + '</p></div>');
                             }
                         },
                         error: function() {
                             btn.prop('disabled', false).text('Test Connection');
-                            resultDiv.html('<div class="rt-ai-test-result error"><p>Request failed. Please try again.</p></div>');
+                            resultDiv.html('<div class="aiss-test-result error"><p>Request failed. Please try again.</p></div>');
                         }
                     });
                 });
 
                 // Refresh Models button
-                $('#rt-ai-refresh-models-btn').on('click', function() {
+                $('#aiss-refresh-models-btn').on('click', function() {
                     var btn = $(this);
-                    var resultSpan = $('#rt-ai-refresh-models-result');
+                    var resultSpan = $('#aiss-refresh-models-result');
                     var nonce = btn.data('nonce');
 
                     btn.prop('disabled', true).text('Refreshing...');
@@ -1481,7 +1481,7 @@ class AI_Search_Summary {
                         url: ajaxurl,
                         type: 'POST',
                         data: {
-                            action: 'rt_ai_refresh_models',
+                            action: 'aiss_refresh_models',
                             nonce: nonce
                         },
                         success: function(response) {
@@ -1502,9 +1502,9 @@ class AI_Search_Summary {
                 });
 
                 // Clear Cache button
-                $('#rt-ai-clear-cache-btn').on('click', function() {
+                $('#aiss-clear-cache-btn').on('click', function() {
                     var btn = $(this);
-                    var resultSpan = $('#rt-ai-clear-cache-result');
+                    var resultSpan = $('#aiss-clear-cache-result');
                     var nonce = btn.data('nonce');
 
                     btn.prop('disabled', true).text('Clearing...');
@@ -1514,7 +1514,7 @@ class AI_Search_Summary {
                         url: ajaxurl,
                         type: 'POST',
                         data: {
-                            action: 'rt_ai_clear_cache',
+                            action: 'aiss_clear_cache',
                             nonce: nonce
                         },
                         success: function(response) {
@@ -1551,9 +1551,9 @@ class AI_Search_Summary {
 
         // Handle the create/repair action (POST for security)
         if (
-            isset( $_POST['rt_ai_build_logs'] ) &&
+            isset( $_POST['aiss_build_logs'] ) &&
             isset( $_POST['_wpnonce'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce'], 'rt_ai_build_logs' )
+            wp_verify_nonce( $_POST['_wpnonce'], 'aiss_build_logs' )
         ) {
             $logs_built = $this->ensure_logs_table();
             if ( ! $logs_built ) {
@@ -1563,12 +1563,12 @@ class AI_Search_Summary {
 
         // Handle the purge old logs action (POST for security)
         if (
-            isset( $_POST['rt_ai_purge_logs'] ) &&
-            isset( $_POST['rt_ai_purge_days'] ) &&
+            isset( $_POST['aiss_purge_logs'] ) &&
+            isset( $_POST['aiss_purge_days'] ) &&
             isset( $_POST['_wpnonce'] ) &&
-            wp_verify_nonce( $_POST['_wpnonce'], 'rt_ai_purge_logs' )
+            wp_verify_nonce( $_POST['_wpnonce'], 'aiss_purge_logs' )
         ) {
-            $days = absint( $_POST['rt_ai_purge_days'] );
+            $days = absint( $_POST['aiss_purge_days'] );
             if ( $days < 1 ) {
                 $days = 30;
             }
@@ -1582,44 +1582,44 @@ class AI_Search_Summary {
         }
         ?>
 
-        <div class="rt-ai-settings-wrap">
+        <div class="aiss-settings-wrap">
             <!-- Header -->
-            <div class="rt-ai-header">
+            <div class="aiss-header">
                 <h1>Analytics</h1>
                 <p>Track AI search usage, success rates, and identify trends.</p>
             </div>
 
             <!-- Notifications -->
             <?php if ( $logs_built && empty( $logs_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
+                <div class="aiss-notice aiss-notice-success">
                     Analytics table has been created or repaired successfully.
                 </div>
             <?php elseif ( ! empty( $logs_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
+                <div class="aiss-notice aiss-notice-error">
                     <?php echo esc_html( $logs_error ); ?>
                 </div>
             <?php endif; ?>
 
             <?php if ( $logs_purged ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-success">
+                <div class="aiss-notice aiss-notice-success">
                     <?php echo esc_html( number_format( $purge_count ) ); ?> old log entries have been deleted.
                 </div>
             <?php elseif ( ! empty( $purge_error ) ) : ?>
-                <div class="rt-ai-notice rt-ai-notice-error">
+                <div class="aiss-notice aiss-notice-error">
                     <?php echo esc_html( $purge_error ); ?>
                 </div>
             <?php endif; ?>
 
             <?php if ( ! $this->logs_table_is_available() ) : ?>
                 <!-- No Data State -->
-                <div class="rt-ai-empty-state">
-                    <div class="rt-ai-empty-icon">📊</div>
+                <div class="aiss-empty-state">
+                    <div class="aiss-empty-icon">📊</div>
                     <h3>No Analytics Data Yet</h3>
                     <p>After visitors use search, analytics data will appear here.</p>
                     <form method="post" style="display: inline;">
-                        <?php wp_nonce_field( 'rt_ai_build_logs' ); ?>
-                        <button type="submit" name="rt_ai_build_logs" value="1"
-                                class="rt-ai-button rt-ai-button-primary">
+                        <?php wp_nonce_field( 'aiss_build_logs' ); ?>
+                        <button type="submit" name="aiss_build_logs" value="1"
+                                class="aiss-button aiss-button-primary">
                             Create Analytics Table
                         </button>
                     </form>
@@ -1711,52 +1711,52 @@ class AI_Search_Summary {
         ?>
 
         <!-- Overview Stats Grid -->
-        <div class="rt-ai-stats-grid">
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Total Searches</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $total_searches ); ?></div>
+        <div class="aiss-stats-grid">
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Total Searches</div>
+                <div class="aiss-stat-value"><?php echo number_format( $total_searches ); ?></div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Success Rate</div>
-                <div class="rt-ai-stat-value"><?php echo esc_html( $success_rate ); ?>%</div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Success Rate</div>
+                <div class="aiss-stat-value"><?php echo esc_html( $success_rate ); ?>%</div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Cache Hit Rate</div>
-                <div class="rt-ai-stat-value"><?php echo esc_html( $cache_hit_rate ); ?>%</div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Cache Hit Rate</div>
+                <div class="aiss-stat-value"><?php echo esc_html( $cache_hit_rate ); ?>%</div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Cache Hits</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $cache_hits ); ?></div>
-                <div class="rt-ai-stat-detail">Server: <?php echo number_format( $server_cache_hits ); ?> · Browser: <?php echo number_format( $session_cache_hits ); ?></div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Cache Hits</div>
+                <div class="aiss-stat-value"><?php echo number_format( $cache_hits ); ?></div>
+                <div class="aiss-stat-detail">Server: <?php echo number_format( $server_cache_hits ); ?> · Browser: <?php echo number_format( $session_cache_hits ); ?></div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Cache Misses</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $cache_misses ); ?></div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Cache Misses</div>
+                <div class="aiss-stat-value"><?php echo number_format( $cache_misses ); ?></div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Last 24 Hours</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $last_24 ); ?></div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Last 24 Hours</div>
+                <div class="aiss-stat-value"><?php echo number_format( $last_24 ); ?></div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">Total Errors</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $error_count ); ?></div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Total Errors</div>
+                <div class="aiss-stat-value"><?php echo number_format( $error_count ); ?></div>
             </div>
-            <div class="rt-ai-stat-card">
-                <div class="rt-ai-stat-label">No Results</div>
-                <div class="rt-ai-stat-value"><?php echo number_format( $no_results_count ); ?></div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">No Results</div>
+                <div class="aiss-stat-value"><?php echo number_format( $no_results_count ); ?></div>
             </div>
         </div>
 
         <!-- Daily Stats Section -->
-        <div class="rt-ai-section">
-            <div class="rt-ai-section-header">
+        <div class="aiss-section">
+            <div class="aiss-section-header">
                 <h2>Last 14 Days</h2>
                 <p>Daily search volume and success rates</p>
             </div>
-            <div class="rt-ai-section-content">
+            <div class="aiss-section-content">
                 <?php if ( ! empty( $daily_stats ) ) : ?>
-                    <div class="rt-ai-table-wrapper">
-                        <table class="rt-ai-table">
+                    <div class="aiss-table-wrapper">
+                        <table class="aiss-table">
                             <thead>
                                 <tr>
                                     <th>Date</th>
@@ -1780,17 +1780,17 @@ class AI_Search_Summary {
                                         <td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $row->day ) ) ); ?></td>
                                         <td><?php echo number_format( $day_total ); ?></td>
                                         <td>
-                                            <span class="rt-ai-badge rt-ai-badge-<?php echo $day_rate >= 90 ? 'success' : ( $day_rate >= 70 ? 'warning' : 'error' ); ?>">
+                                            <span class="aiss-badge aiss-badge-<?php echo $day_rate >= 90 ? 'success' : ( $day_rate >= 70 ? 'warning' : 'error' ); ?>">
                                                 <?php echo esc_html( $day_rate ); ?>%
                                             </span>
                                         </td>
                                         <td>
                                             <?php if ( $day_cache_total > 0 ) : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-<?php echo $day_cache_rate >= 50 ? 'success' : ( $day_cache_rate >= 25 ? 'warning' : 'error' ); ?>">
+                                                <span class="aiss-badge aiss-badge-<?php echo $day_cache_rate >= 50 ? 'success' : ( $day_cache_rate >= 25 ? 'warning' : 'error' ); ?>">
                                                     <?php echo esc_html( $day_cache_rate ); ?>%
                                                 </span>
                                             <?php else : ?>
-                                                <span class="rt-ai-badge">N/A</span>
+                                                <span class="aiss-badge">N/A</span>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -1799,21 +1799,21 @@ class AI_Search_Summary {
                         </table>
                     </div>
                 <?php else : ?>
-                    <div class="rt-ai-empty-message">No recent activity yet.</div>
+                    <div class="aiss-empty-message">No recent activity yet.</div>
                 <?php endif; ?>
             </div>
         </div>
 
         <!-- Top Queries Section -->
-        <div class="rt-ai-section">
-            <div class="rt-ai-section-header">
+        <div class="aiss-section">
+            <div class="aiss-section-header">
                 <h2>Top Search Queries</h2>
                 <p>Most frequently searched terms</p>
             </div>
-            <div class="rt-ai-section-content">
+            <div class="aiss-section-content">
                 <?php if ( ! empty( $top_queries ) ) : ?>
-                    <div class="rt-ai-table-wrapper">
-                        <table class="rt-ai-table">
+                    <div class="aiss-table-wrapper">
+                        <table class="aiss-table">
                             <thead>
                                 <tr>
                                     <th>Query</th>
@@ -1829,10 +1829,10 @@ class AI_Search_Summary {
                                     $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
                                     ?>
                                     <tr>
-                                        <td class="rt-ai-query-cell"><?php echo esc_html( $row->search_query ); ?></td>
+                                        <td class="aiss-query-cell"><?php echo esc_html( $row->search_query ); ?></td>
                                         <td><?php echo number_format( $total_q ); ?></td>
                                         <td>
-                                            <span class="rt-ai-badge rt-ai-badge-<?php echo $success_q_rate >= 90 ? 'success' : ( $success_q_rate >= 70 ? 'warning' : 'error' ); ?>">
+                                            <span class="aiss-badge aiss-badge-<?php echo $success_q_rate >= 90 ? 'success' : ( $success_q_rate >= 70 ? 'warning' : 'error' ); ?>">
                                                 <?php echo esc_html( $success_q_rate ); ?>%
                                             </span>
                                         </td>
@@ -1842,21 +1842,21 @@ class AI_Search_Summary {
                         </table>
                     </div>
                 <?php else : ?>
-                    <div class="rt-ai-empty-message">No search data yet.</div>
+                    <div class="aiss-empty-message">No search data yet.</div>
                 <?php endif; ?>
             </div>
         </div>
 
         <!-- Top Errors Section -->
         <?php if ( ! empty( $top_errors ) ) : ?>
-            <div class="rt-ai-section">
-                <div class="rt-ai-section-header">
+            <div class="aiss-section">
+                <div class="aiss-section-header">
                     <h2>Top AI Errors</h2>
                     <p>Most common error messages</p>
                 </div>
-                <div class="rt-ai-section-content">
-                    <div class="rt-ai-table-wrapper">
-                        <table class="rt-ai-table">
+                <div class="aiss-section-content">
+                    <div class="aiss-table-wrapper">
+                        <table class="aiss-table">
                             <thead>
                                 <tr>
                                     <th>Error Message</th>
@@ -1866,7 +1866,7 @@ class AI_Search_Summary {
                             <tbody>
                                 <?php foreach ( $top_errors as $err ) : ?>
                                     <tr>
-                                        <td class="rt-ai-error-cell">
+                                        <td class="aiss-error-cell">
                                             <?php
                                             $msg = (string) $err->ai_error;
                                             if ( strlen( $msg ) > 80 ) {
@@ -1886,15 +1886,15 @@ class AI_Search_Summary {
         <?php endif; ?>
 
         <!-- Recent Events Section -->
-        <div class="rt-ai-section">
-            <div class="rt-ai-section-header">
+        <div class="aiss-section">
+            <div class="aiss-section-header">
                 <h2>Recent AI Search Events</h2>
                 <p>Latest 50 search requests</p>
             </div>
-            <div class="rt-ai-section-content">
+            <div class="aiss-section-content">
                 <?php if ( ! empty( $recent_events ) ) : ?>
-                    <div class="rt-ai-table-wrapper">
-                        <table class="rt-ai-table rt-ai-table-compact">
+                    <div class="aiss-table-wrapper">
+                        <table class="aiss-table aiss-table-compact">
                             <thead>
                                 <tr>
                                     <th>Query</th>
@@ -1907,31 +1907,31 @@ class AI_Search_Summary {
                             <tbody>
                                 <?php foreach ( $recent_events as $event ) : ?>
                                     <tr>
-                                        <td class="rt-ai-query-cell"><?php echo esc_html( $event->search_query ); ?></td>
+                                        <td class="aiss-query-cell"><?php echo esc_html( $event->search_query ); ?></td>
                                         <td>
                                             <?php if ( (int) $event->ai_success === 1 ) : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-success">Success</span>
+                                                <span class="aiss-badge aiss-badge-success">Success</span>
                                             <?php else : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-error">Error</span>
+                                                <span class="aiss-badge aiss-badge-error">Error</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php
                                             $cache_val = $event->cache_hit !== null ? (int) $event->cache_hit : null;
                                             if ( $cache_val === 1 ) : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-success" title="Server cache hit">Hit</span>
+                                                <span class="aiss-badge aiss-badge-success" title="Server cache hit">Hit</span>
                                             <?php elseif ( $cache_val === 2 ) : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-info" title="Browser session cache hit">Session</span>
+                                                <span class="aiss-badge aiss-badge-info" title="Browser session cache hit">Session</span>
                                             <?php elseif ( $cache_val === 0 ) : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-warning">Miss</span>
+                                                <span class="aiss-badge aiss-badge-warning">Miss</span>
                                             <?php else : ?>
-                                                <span class="rt-ai-badge rt-ai-badge-muted">N/A</span>
+                                                <span class="aiss-badge aiss-badge-muted">N/A</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="rt-ai-error-cell" <?php if ( ! empty( $event->ai_error ) ) : ?>title="<?php echo esc_attr( $event->ai_error ); ?>"<?php endif; ?>>
+                                        <td class="aiss-error-cell" <?php if ( ! empty( $event->ai_error ) ) : ?>title="<?php echo esc_attr( $event->ai_error ); ?>"<?php endif; ?>>
                                             <?php echo esc_html( $event->ai_error ); ?>
                                         </td>
-                                        <td class="rt-ai-date-cell">
+                                        <td class="aiss-date-cell">
                                             <?php echo esc_html( date_i18n( 'M j, g:i a', strtotime( $event->created_at ) ) ); ?>
                                         </td>
                                     </tr>
@@ -1940,33 +1940,33 @@ class AI_Search_Summary {
                         </table>
                     </div>
                 <?php else : ?>
-                    <div class="rt-ai-empty-message">No recent search events logged yet.</div>
+                    <div class="aiss-empty-message">No recent search events logged yet.</div>
                 <?php endif; ?>
             </div>
         </div>
 
         <!-- Data Management Section -->
-        <div class="rt-ai-section">
-            <div class="rt-ai-section-header">
+        <div class="aiss-section">
+            <div class="aiss-section-header">
                 <h2>Data Management</h2>
                 <p>Manage analytics log data</p>
             </div>
-            <div class="rt-ai-section-content">
-                <div class="rt-ai-field">
-                    <div class="rt-ai-field-label">
+            <div class="aiss-section-content">
+                <div class="aiss-field">
+                    <div class="aiss-field-label">
                         <label>Purge Old Logs</label>
                     </div>
-                    <div class="rt-ai-field-description">
+                    <div class="aiss-field-description">
                         Delete log entries older than the specified number of days to free up database space.
                     </div>
                     <form method="post" style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
-                        <?php wp_nonce_field( 'rt_ai_purge_logs' ); ?>
+                        <?php wp_nonce_field( 'aiss_purge_logs' ); ?>
                         <span>Delete logs older than</span>
-                        <input type="number" name="rt_ai_purge_days" value="30" min="1" max="365"
+                        <input type="number" name="aiss_purge_days" value="30" min="1" max="365"
                                style="width: 80px;" />
                         <span>days</span>
-                        <button type="submit" name="rt_ai_purge_logs" value="1"
-                                class="rt-ai-button rt-ai-button-secondary"
+                        <button type="submit" name="aiss_purge_logs" value="1"
+                                class="aiss-button aiss-button-secondary"
                                 onclick="return confirm('Are you sure you want to delete old log entries? This action cannot be undone.');">
                             Purge Old Logs
                         </button>
@@ -2006,7 +2006,7 @@ class AI_Search_Summary {
         }
 
         wp_add_dashboard_widget(
-            'rt_ai_search_dashboard_widget',
+            'aiss_dashboard_widget',
             'AI Search Summary',
             array( $this, 'render_dashboard_widget' )
         );
@@ -2023,7 +2023,7 @@ class AI_Search_Summary {
                 <p style="margin: 0 0 16px 0; font-size: 13px; color: #6e6e73;">
                     Once visitors use search, stats will appear here.
                 </p>
-                <a href="<?php echo admin_url( 'admin.php?page=rt-ai-search-settings' ); ?>" 
+                <a href="<?php echo admin_url( 'admin.php?page=aiss-settings' ); ?>" 
                    style="display: inline-block; padding: 6px 14px; background: #0071e3; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500;">
                     Configure Plugin
                 </a>
@@ -2061,28 +2061,28 @@ class AI_Search_Summary {
         );
         ?>
         
-        <div class="rt-ai-widget-container">
+        <div class="aiss-widget-container">
             <!-- Stats Grid -->
-            <div class="rt-ai-widget-stats-grid">
-                <div class="rt-ai-widget-stat">
-                    <span class="rt-ai-widget-stat-value"><?php echo number_format( $total_searches ); ?></span>
-                    <span class="rt-ai-widget-stat-label">Total Searches</span>
+            <div class="aiss-widget-stats-grid">
+                <div class="aiss-widget-stat">
+                    <span class="aiss-widget-stat-value"><?php echo number_format( $total_searches ); ?></span>
+                    <span class="aiss-widget-stat-label">Total Searches</span>
                 </div>
-                <div class="rt-ai-widget-stat">
-                    <span class="rt-ai-widget-stat-value"><?php echo esc_html( $success_rate ); ?>%</span>
-                    <span class="rt-ai-widget-stat-label">Success Rate</span>
+                <div class="aiss-widget-stat">
+                    <span class="aiss-widget-stat-value"><?php echo esc_html( $success_rate ); ?>%</span>
+                    <span class="aiss-widget-stat-label">Success Rate</span>
                 </div>
-                <div class="rt-ai-widget-stat">
-                    <span class="rt-ai-widget-stat-value"><?php echo number_format( $last_24 ); ?></span>
-                    <span class="rt-ai-widget-stat-label">Last 24 Hours</span>
+                <div class="aiss-widget-stat">
+                    <span class="aiss-widget-stat-value"><?php echo number_format( $last_24 ); ?></span>
+                    <span class="aiss-widget-stat-label">Last 24 Hours</span>
                 </div>
             </div>
 
-            <div class="rt-ai-widget-section">
-                <h4 class="rt-ai-widget-section-title">Top Search Queries</h4>
+            <div class="aiss-widget-section">
+                <h4 class="aiss-widget-section-title">Top Search Queries</h4>
                 
                 <?php if ( ! empty( $top_queries ) ) : ?>
-                    <table class="rt-ai-widget-table">
+                    <table class="aiss-widget-table">
                         <thead>
                             <tr>
                                 <th>Query</th>
@@ -2099,15 +2099,15 @@ class AI_Search_Summary {
                                 
                                 // Determine badge class
                                 if ( $success_q_rate >= 90 ) {
-                                    $badge_class = 'rt-ai-widget-badge-success';
+                                    $badge_class = 'aiss-widget-badge-success';
                                 } elseif ( $success_q_rate >= 70 ) {
-                                    $badge_class = 'rt-ai-widget-badge-warning';
+                                    $badge_class = 'aiss-widget-badge-warning';
                                 } else {
-                                    $badge_class = 'rt-ai-widget-badge-error';
+                                    $badge_class = 'aiss-widget-badge-error';
                                 }
                                 ?>
                                 <tr>
-                                    <td class="rt-ai-widget-query">
+                                    <td class="aiss-widget-query">
                                         <?php 
                                         $query_display = esc_html( $row->search_query );
                                         if ( strlen( $query_display ) > 35 ) {
@@ -2117,10 +2117,10 @@ class AI_Search_Summary {
                                         ?>
                                     </td>
                                     <td style="text-align: center;">
-                                        <span class="rt-ai-widget-count"><?php echo number_format( $total_q ); ?></span>
+                                        <span class="aiss-widget-count"><?php echo number_format( $total_q ); ?></span>
                                     </td>
                                     <td style="text-align: center;">
-                                        <span class="rt-ai-widget-badge <?php echo esc_attr( $badge_class ); ?>">
+                                        <span class="aiss-widget-badge <?php echo esc_attr( $badge_class ); ?>">
                                             <?php echo esc_html( $success_q_rate ); ?>%
                                         </span>
                                     </td>
@@ -2129,15 +2129,15 @@ class AI_Search_Summary {
                         </tbody>
                     </table>
                 <?php else : ?>
-                    <div class="rt-ai-widget-empty">
+                    <div class="aiss-widget-empty">
                         No search data yet. Waiting for visitors to use AI search.
                     </div>
                 <?php endif; ?>
             </div>
 
-            <div class="rt-ai-widget-footer">
-                <a href="<?php echo admin_url( 'admin.php?page=rt-ai-search-analytics' ); ?>" 
-                   class="rt-ai-widget-link">
+            <div class="aiss-widget-footer">
+                <a href="<?php echo admin_url( 'admin.php?page=aiss-analytics' ); ?>" 
+                   class="aiss-widget-link">
                     View Full Analytics →
                 </a>
             </div>
@@ -2167,8 +2167,8 @@ class AI_Search_Summary {
         $version = AI_SEARCH_VERSION;
 
         wp_enqueue_style(
-            'rt-ai-search',
-            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.css',
+            'aiss',
+            plugin_dir_url( __FILE__ ) . 'assets/aiss.css',
             array(),
             $version
         );
@@ -2176,22 +2176,22 @@ class AI_Search_Summary {
         if ( ! empty( $options['custom_css'] ) ) {
             // Defense in depth: sanitize again on output
             $custom_css = $this->sanitize_custom_css( $options['custom_css'] );
-            wp_add_inline_style( 'rt-ai-search', $custom_css );
+            wp_add_inline_style( 'aiss', $custom_css );
         }
 
         wp_enqueue_script(
-            'rt-ai-search',
-            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search.js',
+            'aiss',
+            plugin_dir_url( __FILE__ ) . 'assets/aiss.js',
             array(),
             $version,
             true
         );
 
         wp_localize_script(
-            'rt-ai-search',
-            'RTAISearch',
+            'aiss',
+            'AISSearch',
             array(
-                'endpoint'       => rest_url( 'rt-ai-search/v1/summary' ),
+                'endpoint'       => rest_url( 'aiss/v1/summary' ),
                 'query'          => get_search_query(),
                 'cacheVersion'   => $this->get_cache_namespace(),
                 'requestTimeout' => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : 60,
@@ -2224,26 +2224,26 @@ class AI_Search_Summary {
         $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
         $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
         ?>
-        <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
-            <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
-                <div class="rt-ai-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
+        <div class="aiss-summary" style="margin-bottom: 1.5rem;">
+            <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
+                <div class="aiss-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
                     </h2>
                     <?php if ( $show_badge ) : ?>
-                    <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
-                        <span class="rt-ai-openai-mark" aria-hidden="true"></span>
-                        <span class="rt-ai-openai-text">Powered by OpenAI</span>
+                    <span class="aiss-openai-badge" aria-label="Powered by OpenAI">
+                        <span class="aiss-openai-mark" aria-hidden="true"></span>
+                        <span class="aiss-openai-text">Powered by OpenAI</span>
                     </span>
                     <?php endif; ?>
                 </div>
 
-                <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content" aria-live="polite">
-                    <span class="rt-ai-spinner" role="status" aria-label="Loading AI summary"></span>
-                    <p class="rt-ai-loading-text">Generating summary based on your search and <?php echo esc_html( $site_name ); ?> articles...</p>
+                <div id="aiss-summary-content" class="aiss-summary-content" aria-live="polite">
+                    <span class="aiss-spinner" role="status" aria-label="Loading AI summary"></span>
+                    <p class="aiss-loading-text">Generating summary based on your search and <?php echo esc_html( $site_name ); ?> articles...</p>
                 </div>
 
-                <div class="rt-ai-search-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
+                <div class="aiss-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
                     AI summaries are generated automatically based on <?php echo esc_html( $site_name ); ?> articles and may be inaccurate or incomplete. Always verify important details.
                 </div>
             </div>
@@ -2253,12 +2253,12 @@ class AI_Search_Summary {
 
     public function enqueue_admin_assets( $hook ) {
         $allowed_hooks = array(
-            'toplevel_page_rt-ai-search-settings',
-            'ai-search_page_rt-ai-search-analytics',
+            'toplevel_page_aiss-settings',
+            'ai-search_page_aiss-analytics',
         );
         
         $is_our_page = in_array( $hook, $allowed_hooks, true ) || 
-                       strpos( $hook, 'rt-ai-search' ) !== false;
+                       strpos( $hook, 'aiss' ) !== false;
         
         if ( ! $is_our_page ) {
             return;
@@ -2267,8 +2267,8 @@ class AI_Search_Summary {
         $version = AI_SEARCH_VERSION;
 
         wp_enqueue_style(
-            'rt-ai-search-admin',
-            plugin_dir_url( __FILE__ ) . 'assets/rt-ai-search-admin.css',
+            'aiss-admin',
+            plugin_dir_url( __FILE__ ) . 'assets/aiss-admin.css',
             array(),
             $version
         );
@@ -2310,8 +2310,8 @@ class AI_Search_Summary {
         }
 
         // Increment the counter
-        $key = 'rt_ai_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
-        set_transient( $key, $rate_info['used'] + 1, RT_AI_SEARCH_RATE_LIMIT_WINDOW );
+        $key = 'aiss_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
+        set_transient( $key, $rate_info['used'] + 1, AISS_RATE_LIMIT_WINDOW );
 
         return false;
     }
@@ -2323,8 +2323,8 @@ class AI_Search_Summary {
      * @return array Rate limit info with 'limit', 'remaining', 'used', and 'reset' keys.
      */
     private function get_rate_limit_info( $ip ) {
-        $key   = 'rt_ai_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
-        $limit = RT_AI_SEARCH_IP_RATE_LIMIT;
+        $key   = 'aiss_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
+        $limit = AISS_IP_RATE_LIMIT;
         $used  = (int) get_transient( $key );
 
         // Reset time is the start of the next minute
@@ -2342,13 +2342,13 @@ class AI_Search_Summary {
 
     private function get_client_ip() {
         // Use REMOTE_ADDR by default - it's the only non-spoofable source.
-        // Sites behind trusted reverse proxies can define RT_AI_SEARCH_TRUSTED_PROXY_HEADER
+        // Sites behind trusted reverse proxies can define AISS_TRUSTED_PROXY_HEADER
         // to read from X-Forwarded-For or similar headers.
         $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
 
         // Allow sites behind trusted proxies to use forwarded headers
-        if ( defined( 'RT_AI_SEARCH_TRUSTED_PROXY_HEADER' ) && RT_AI_SEARCH_TRUSTED_PROXY_HEADER ) {
-            $header = 'HTTP_' . strtoupper( str_replace( '-', '_', RT_AI_SEARCH_TRUSTED_PROXY_HEADER ) );
+        if ( defined( 'AISS_TRUSTED_PROXY_HEADER' ) && AISS_TRUSTED_PROXY_HEADER ) {
+            $header = 'HTTP_' . strtoupper( str_replace( '-', '_', AISS_TRUSTED_PROXY_HEADER ) );
             if ( ! empty( $_SERVER[ $header ] ) ) {
                 // Take the first IP in the list (original client)
                 $ips = explode( ',', $_SERVER[ $header ] );
@@ -2369,7 +2369,7 @@ class AI_Search_Summary {
 
     public function register_rest_routes() {
         register_rest_route(
-            'rt-ai-search/v1',
+            'aiss/v1',
             '/summary',
             array(
                 'methods'             => 'GET',
@@ -2387,7 +2387,7 @@ class AI_Search_Summary {
 
         // Lightweight endpoint for logging frontend (session) cache hits
         register_rest_route(
-            'rt-ai-search/v1',
+            'aiss/v1',
             '/log-session-hit',
             array(
                 'methods'             => 'POST',
@@ -2442,7 +2442,7 @@ class AI_Search_Summary {
     public function add_rate_limit_headers( $response, $server, $request ) {
         // Only add headers to our plugin's endpoints
         $route = $request->get_route();
-        if ( strpos( $route, '/rt-ai-search/' ) === false ) {
+        if ( strpos( $route, '/aiss/' ) === false ) {
             return $response;
         }
 
@@ -2466,7 +2466,7 @@ class AI_Search_Summary {
         // Block obvious bots to save API costs
         if ( $this->is_likely_bot() ) {
             return new WP_Error(
-                RT_AI_ERROR_BOT_DETECTED,
+                AISS_ERROR_BOT_DETECTED,
                 'AI search is not available for automated requests.',
                 array( 'status' => 403 )
             );
@@ -2477,7 +2477,7 @@ class AI_Search_Summary {
         if ( $this->is_ip_rate_limited( $client_ip ) ) {
             $rate_info = $this->get_rate_limit_info( $client_ip );
             return new WP_Error(
-                RT_AI_ERROR_RATE_LIMITED,
+                AISS_ERROR_RATE_LIMITED,
                 'Too many requests from your IP address. Please try again in a minute.',
                 array(
                     'status'     => 429,
@@ -2586,7 +2586,7 @@ class AI_Search_Summary {
                 array(
                     'answer_html' => '',
                     'error'       => 'AI search is not enabled.',
-                    'error_code'  => RT_AI_ERROR_NOT_CONFIGURED,
+                    'error_code'  => AISS_ERROR_NOT_CONFIGURED,
                 )
             );
         }
@@ -2599,7 +2599,7 @@ class AI_Search_Summary {
                 array(
                     'answer_html' => '',
                     'error'       => 'Missing search query.',
-                    'error_code'  => RT_AI_ERROR_INVALID_QUERY,
+                    'error_code'  => AISS_ERROR_INVALID_QUERY,
                 )
             );
         }
@@ -2630,8 +2630,8 @@ class AI_Search_Summary {
                 $content = wp_strip_all_tags( $post->post_content );
                 
                 // Use smart truncation for better sentence boundaries
-                $truncated_content = $this->smart_truncate( $content, RT_AI_SEARCH_CONTENT_LENGTH );
-                $excerpt = $this->smart_truncate( $content, RT_AI_SEARCH_EXCERPT_LENGTH );
+                $truncated_content = $this->smart_truncate( $content, AISS_CONTENT_LENGTH );
+                $excerpt = $this->smart_truncate( $content, AISS_EXCERPT_LENGTH );
 
                 $posts_for_ai[] = array(
                     'id'      => $post->ID,
@@ -2657,7 +2657,7 @@ class AI_Search_Summary {
                 array(
                     'answer_html' => '',
                     'error'       => $ai_error ? $ai_error : 'AI summary is not available right now.',
-                    'error_code'  => RT_AI_ERROR_API_ERROR,
+                    'error_code'  => AISS_ERROR_API_ERROR,
                 )
             );
         }
@@ -2708,7 +2708,7 @@ class AI_Search_Summary {
             return false;
         }
 
-        $key   = 'rt_ai_rate_' . gmdate( 'YmdHi' );
+        $key   = 'aiss_rate_' . gmdate( 'YmdHi' );
         $count = (int) get_transient( $key );
 
         if ( $count >= $limit ) {
@@ -2716,7 +2716,7 @@ class AI_Search_Summary {
         }
 
         $count++;
-        set_transient( $key, $count, RT_AI_SEARCH_RATE_LIMIT_WINDOW );
+        set_transient( $key, $count, AISS_RATE_LIMIT_WINDOW );
 
         return false;
     }
@@ -2938,7 +2938,7 @@ class AI_Search_Summary {
             // Using 16000 to allow for extensive reasoning while still getting output
             $body['max_completion_tokens'] = 16000;
         } else {
-            $body['max_tokens'] = RT_AI_SEARCH_MAX_TOKENS;
+            $body['max_tokens'] = AISS_MAX_TOKENS;
         }
 
         // o-series (reasoning models) don't support temperature
@@ -2957,7 +2957,7 @@ class AI_Search_Summary {
                 'Content-Type'  => 'application/json',
             ),
             'body'    => wp_json_encode( $body ),
-            'timeout' => RT_AI_SEARCH_API_TIMEOUT,
+            'timeout' => AISS_API_TIMEOUT,
         );
 
         // Retry logic: attempt up to 3 times with exponential backoff for transient errors
@@ -3119,17 +3119,17 @@ class AI_Search_Summary {
             return '';
         }
 
-        $sources = array_slice( $sources, 0, RT_AI_SEARCH_MAX_SOURCES_DISPLAY );
+        $sources = array_slice( $sources, 0, AISS_MAX_SOURCES_DISPLAY );
         $count   = count( $sources );
 
         $show_label = 'Show sources (' . intval( $count ) . ')';
         $hide_label = 'Hide sources';
 
-        $html  = '<div class="rt-ai-sources">';
-        $html .= '<button type="button" class="rt-ai-sources-toggle" aria-expanded="false" aria-controls="rt-ai-sources-list" data-label-show="' . esc_attr( $show_label ) . '" data-label-hide="' . esc_attr( $hide_label ) . '">';
+        $html  = '<div class="aiss-sources">';
+        $html .= '<button type="button" class="aiss-sources-toggle" aria-expanded="false" aria-controls="aiss-sources-list" data-label-show="' . esc_attr( $show_label ) . '" data-label-hide="' . esc_attr( $hide_label ) . '">';
         $html .= esc_html( $show_label );
         $html .= '</button>';
-        $html .= '<ul id="rt-ai-sources-list" class="rt-ai-sources-list" hidden>';
+        $html .= '<ul id="aiss-sources-list" class="aiss-sources-list" hidden>';
 
         foreach ( $sources as $src ) {
             $title   = isset( $src['title'] ) ? $src['title'] : '';

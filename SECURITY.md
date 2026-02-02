@@ -12,13 +12,13 @@ We release patches for security vulnerabilities for the following versions:
 
 ## Reporting a Vulnerability
 
-We take the security of RivianTrackr AI Search seriously. If you discover a security vulnerability, please follow these steps:
+We take the security of AI Search Summary seriously. If you discover a security vulnerability, please follow these steps:
 
 ### How to Report
 
 **DO NOT** create a public GitHub issue for security vulnerabilities.
 
-Instead, please email security reports to: **[jose@riviantrackr.com]**
+Instead, please email security reports to: **[security@example.com]**
 
 Include the following information:
 - Description of the vulnerability
@@ -44,7 +44,7 @@ By default, OpenAI API keys are stored in the WordPress options table in plain t
 Add this line to your `wp-config.php` file (before "That's all, stop editing!"):
 
 ```php
-define( 'RT_AI_SEARCH_API_KEY', 'sk-proj-your-api-key-here' );
+define( 'AISS_API_KEY', 'sk-proj-your-api-key-here' );
 ```
 
 **Benefits of using a constant:**
@@ -57,7 +57,7 @@ define( 'RT_AI_SEARCH_API_KEY', 'sk-proj-your-api-key-here' );
 
 ```php
 // In wp-config.php
-define( 'RT_AI_SEARCH_API_KEY', getenv('OPENAI_API_KEY') );
+define( 'AISS_API_KEY', getenv('OPENAI_API_KEY') );
 ```
 
 Then set `OPENAI_API_KEY` in your server's environment configuration.
@@ -99,7 +99,7 @@ Then set `OPENAI_API_KEY` in your server's environment configuration.
 
 ### WordPress REST API Endpoint
 
-The plugin exposes a public REST API endpoint at `/wp-json/rt-ai-search/v1/summary` with `permission_callback => '__return_true'`. This is intentional for search functionality but means:
+The plugin exposes a public REST API endpoint at `/wp-json/aiss/v1/summary` with `permission_callback => '__return_true'`. This is intentional for search functionality but means:
 
 - Anyone can trigger AI searches on your site
 - Rate limiting is implemented to prevent abuse
@@ -146,4 +146,4 @@ Security updates will be released as patch versions (e.g., 3.3.1) and will be cl
 
 ## Questions?
 
-If you have questions about this security policy, please contact us at **[jose@riviantrackr.com]**.
+If you have questions about this security policy, please contact us at **[security@example.com]**.

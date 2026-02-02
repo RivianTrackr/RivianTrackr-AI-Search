@@ -1,13 +1,13 @@
 (function() {
   // Session cache helpers
-  var CACHE_PREFIX = 'rt_ai_search_';
-  var CACHE_VERSION_KEY = 'rt_ai_search_version';
+  var CACHE_PREFIX = 'aiss_';
+  var CACHE_VERSION_KEY = 'aiss_version';
   var CACHE_TTL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   function checkCacheVersion() {
     // Invalidate browser cache if server cache version changed (e.g., model changed)
     try {
-      var serverVersion = window.RTAISearch && window.RTAISearch.cacheVersion;
+      var serverVersion = window.AISSearch && window.AISSearch.cacheVersion;
       if (!serverVersion) return;
 
       var storedVersion = sessionStorage.getItem(CACHE_VERSION_KEY);
@@ -66,8 +66,8 @@
 
   function logSessionCacheHit(query, resultsCount) {
     // Fire and forget - log session cache hit to analytics
-    if (!window.RTAISearch || !window.RTAISearch.endpoint) return;
-    var logEndpoint = window.RTAISearch.endpoint.replace('/summary', '/log-session-hit');
+    if (!window.AISSearch || !window.AISSearch.endpoint) return;
+    var logEndpoint = window.AISSearch.endpoint.replace('/summary', '/log-session-hit');
     try {
       fetch(logEndpoint, {
         method: 'POST',
@@ -81,13 +81,13 @@
   }
 
   function showSkeleton(container) {
-    container.classList.add('rt-ai-loading');
+    container.classList.add('aiss-loading');
     container.innerHTML =
-      '<div class="rt-ai-skeleton" aria-hidden="true">' +
-        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-full"></div>' +
-        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-full"></div>' +
-        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-medium"></div>' +
-        '<div class="rt-ai-skeleton-line rt-ai-skeleton-line-short"></div>' +
+      '<div class="aiss-skeleton" aria-hidden="true">' +
+        '<div class="aiss-skeleton-line aiss-skeleton-line-full"></div>' +
+        '<div class="aiss-skeleton-line aiss-skeleton-line-full"></div>' +
+        '<div class="aiss-skeleton-line aiss-skeleton-line-medium"></div>' +
+        '<div class="aiss-skeleton-line aiss-skeleton-line-short"></div>' +
       '</div>';
   }
 
@@ -100,15 +100,15 @@
   }
 
   ready(function() {
-    if (!window.RTAISearch) return;
+    if (!window.AISSearch) return;
 
     // Check if server cache was cleared (model changed, etc.) and invalidate browser cache
     checkCacheVersion();
 
-    var container = document.getElementById('rt-ai-search-summary-content');
+    var container = document.getElementById('aiss-search-summary-content');
     if (!container) return;
 
-    var q = (window.RTAISearch.query || '').trim();
+    var q = (window.AISSearch.query || '').trim();
     if (!q) return;
 
     // Show skeleton loading immediately
@@ -117,8 +117,8 @@
     // Check session cache first
     var cached = getFromCache(q);
     if (cached) {
-      container.classList.remove('rt-ai-loading');
-      container.classList.add('rt-ai-loaded');
+      container.classList.remove('aiss-loading');
+      container.classList.add('aiss-loaded');
       if (cached.answer_html) {
         container.innerHTML = cached.answer_html;
       } else if (cached.error) {
@@ -130,13 +130,13 @@
       return;
     }
 
-    var endpoint = window.RTAISearch.endpoint + '?q=' + encodeURIComponent(q);
+    var endpoint = window.AISSearch.endpoint + '?q=' + encodeURIComponent(q);
 
     // Set timeout (configurable via admin settings, default 60 seconds)
-    var timeoutMs = (window.RTAISearch.requestTimeout || 60) * 1000;
+    var timeoutMs = (window.AISSearch.requestTimeout || 60) * 1000;
     var timeoutId = setTimeout(function() {
-      container.classList.remove('rt-ai-loading');
-      container.classList.add('rt-ai-loaded');
+      container.classList.remove('aiss-loading');
+      container.classList.add('aiss-loaded');
       container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
     }, timeoutMs);
 
@@ -165,8 +165,8 @@
       })
       .then(function(data) {
         clearTimeout(timeoutId);
-        container.classList.remove('rt-ai-loading');
-        container.classList.add('rt-ai-loaded');
+        container.classList.remove('aiss-loading');
+        container.classList.add('aiss-loaded');
 
         if (data && data.answer_html) {
           // Cache successful responses
@@ -189,19 +189,19 @@
       })
       .catch(function(error) {
         clearTimeout(timeoutId);
-        container.classList.remove('rt-ai-loading');
-        container.classList.add('rt-ai-loaded');
+        container.classList.remove('aiss-loading');
+        container.classList.add('aiss-loaded');
         container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       });
 
     document.addEventListener('click', function(e) {
-      var btn = e.target.closest('.rt-ai-sources-toggle');
+      var btn = e.target.closest('.aiss-sources-toggle');
       if (!btn) return;
 
-      var wrapper = btn.closest('.rt-ai-sources');
+      var wrapper = btn.closest('.aiss-sources');
       if (!wrapper) return;
 
-      var list = wrapper.querySelector('.rt-ai-sources-list');
+      var list = wrapper.querySelector('.aiss-sources-list');
       if (!list) return;
 
       var isHidden = list.hasAttribute('hidden');

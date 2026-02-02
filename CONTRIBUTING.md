@@ -1,6 +1,6 @@
-# Contributing to RivianTrackr AI Search
+# Contributing to AI Search Summary
 
-Thank you for your interest in contributing to RivianTrackr AI Search! We welcome contributions from the community.
+Thank you for your interest in contributing to AI Search Summary! We welcome contributions from the community.
 
 ## Table of Contents
 
@@ -32,7 +32,7 @@ This project adheres to a code of conduct. By participating, you are expected to
 ### Types of Contributions We Welcome
 
 - 🐛 **Bug fixes** - Fix issues or improve error handling
-- ✨ **New features** - Add functionality that benefits RivianTrackr users
+- ✨ **New features** - Add functionality that benefits AI Search Summary users
 - 📝 **Documentation** - Improve README, code comments, or inline docs
 - 🎨 **UI/UX improvements** - Enhance the admin interface or frontend display
 - ⚡ **Performance optimizations** - Make the plugin faster or more efficient
@@ -54,12 +54,12 @@ This project adheres to a code of conduct. By participating, you are expected to
 
 1. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/RivianTrackr-AI-Search.git
+   git clone https://github.com/YOUR-USERNAME/AI-Search-Summary.git
    ```
 
 2. Copy the plugin to your WordPress plugins directory:
    ```bash
-   cp -r RivianTrackr-AI-Search /path/to/wordpress/wp-content/plugins/
+   cp -r AI-Search-Summary /path/to/wordpress/wp-content/plugins/
    ```
 
 3. Activate the plugin in WordPress admin
@@ -120,7 +120,7 @@ private function calculate_success_rate( $success_count, $total ) {
 
 - Mobile-first responsive design
 - Use CSS custom properties where appropriate
-- Prefix classes with `rt-ai-` to avoid conflicts
+- Prefix classes with `aiss-` to avoid conflicts
 - Use flexbox for layouts
 - Keep specificity low
 
@@ -231,7 +231,7 @@ Describe how you tested these changes
 
 ### Before Reporting
 
-1. Check if the bug has already been reported in [Issues](https://github.com/RivianTrackr/RivianTrackr-AI-Search/issues)
+1. Check if the bug has already been reported in [Issues](https://github.com/YOUR-ORG/AI-Search-Summary/issues)
 2. Test with the latest version of the plugin
 3. Test with default WordPress theme (Twenty Twenty-Four)
 4. Disable other plugins to check for conflicts
@@ -296,15 +296,15 @@ Mockups, examples, or other context
 ### Useful Constants
 
 The plugin defines several constants you can use:
-- `RT_AI_SEARCH_VERSION` - Current plugin version
-- `RT_AI_SEARCH_MIN_CACHE_TTL` - Minimum cache time (60s)
-- `RT_AI_SEARCH_MAX_CACHE_TTL` - Maximum cache time (86400s)
-- `RT_AI_SEARCH_CONTENT_LENGTH` - Post content length (400 chars)
-- `RT_AI_SEARCH_EXCERPT_LENGTH` - Excerpt length (200 chars)
+- `AISS_VERSION` - Current plugin version
+- `AISS_MIN_CACHE_TTL` - Minimum cache time (60s)
+- `AISS_MAX_CACHE_TTL` - Maximum cache time (86400s)
+- `AISS_CONTENT_LENGTH` - Post content length (400 chars)
+- `AISS_EXCERPT_LENGTH` - Excerpt length (200 chars)
 
 ### Database Tables
 
-Analytics data is stored in `wp_rt_ai_search_logs` table:
+Analytics data is stored in `wp_aiss_logs` table:
 - `search_query` - The search term
 - `results_count` - Number of posts found
 - `ai_success` - Whether AI summary succeeded (0/1)
@@ -332,8 +332,8 @@ Check logs in `wp-content/debug.log`
 ## Questions?
 
 If you have questions about contributing, please:
-- Open a [Discussion](https://github.com/RivianTrackr/RivianTrackr-AI-Search/discussions)
-- Email us at [jose@riviantrackr.com]
+- Open a [Discussion](https://github.com/YOUR-ORG/AI-Search-Summary/discussions)
+- Open an issue on GitHub
 
 ## License
 
@@ -341,4 +341,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to RivianTrackr AI Search! 🚗⚡
+Thank you for contributing to AI Search Summary!
