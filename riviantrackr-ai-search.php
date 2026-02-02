@@ -4,12 +4,12 @@ declare(strict_types=1);
  * Plugin Name: AI Search Summary
  * Plugin URI: https://github.com/josevarghese/AI-Search-Summary
  * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 4.0.0
+ * Version: 4.0.1
  * Author: Developer
  * License: GPL v2 or later
  */
 
-define( 'AI_SEARCH_VERSION', '4.0.0' );
+define( 'AI_SEARCH_VERSION', '4.0.1' );
 define( 'RT_AI_SEARCH_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'RT_AI_SEARCH_MIN_CACHE_TTL', 60 );
 define( 'RT_AI_SEARCH_MAX_CACHE_TTL', 86400 );
@@ -342,6 +342,7 @@ class AI_Search_Summary {
             'request_timeout'      => 60,
             'site_name'            => get_bloginfo( 'name' ),
             'site_description'     => '',
+            'show_openai_badge'    => 1,
             'custom_css'           => '',
         );
 
@@ -392,6 +393,8 @@ class AI_Search_Summary {
         $output['site_description'] = isset($input['site_description'])
             ? sanitize_textarea_field( trim($input['site_description']) )
             : '';
+
+        $output['show_openai_badge'] = isset($input['show_openai_badge']) && $input['show_openai_badge'] ? 1 : 0;
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
@@ -1188,6 +1191,28 @@ class AI_Search_Summary {
                                        name="<?php echo esc_attr( $this->option_name ); ?>[site_description]"
                                        value="<?php echo esc_attr( isset( $options['site_description'] ) ? $options['site_description'] : '' ); ?>"
                                        placeholder="e.g., a technology news and reviews site" />
+                            </div>
+                        </div>
+
+                        <!-- Show OpenAI Badge -->
+                        <div class="rt-ai-field">
+                            <div class="rt-ai-field-label">
+                                <label>Show "Powered by OpenAI" Badge</label>
+                            </div>
+                            <div class="rt-ai-field-description">
+                                Display the OpenAI attribution badge on search summaries
+                            </div>
+                            <div class="rt-ai-toggle-wrapper">
+                                <label class="rt-ai-toggle">
+                                    <input type="checkbox"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[show_openai_badge]"
+                                           value="1"
+                                           <?php checked( isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1, 1 ); ?> />
+                                    <span class="rt-ai-toggle-slider"></span>
+                                </label>
+                                <span class="rt-ai-toggle-label">
+                                    <?php echo ( isset( $options['show_openai_badge'] ) && $options['show_openai_badge'] ) ? 'Visible' : 'Hidden'; ?>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -2154,6 +2179,7 @@ class AI_Search_Summary {
 
         $search_query = get_search_query();
         $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
+        $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
         ?>
         <div class="rt-ai-search-summary" style="margin-bottom: 1.5rem;">
             <div class="rt-ai-search-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
@@ -2161,10 +2187,12 @@ class AI_Search_Summary {
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
                     </h2>
+                    <?php if ( $show_badge ) : ?>
                     <span class="rt-ai-openai-badge" aria-label="Powered by OpenAI">
                         <span class="rt-ai-openai-mark" aria-hidden="true"></span>
                         <span class="rt-ai-openai-text">Powered by OpenAI</span>
                     </span>
+                    <?php endif; ?>
                 </div>
 
                 <div id="rt-ai-search-summary-content" class="rt-ai-search-summary-content" aria-live="polite">
