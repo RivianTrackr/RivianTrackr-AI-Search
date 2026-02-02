@@ -390,7 +390,7 @@ class AI_Search_Summary {
             'show_sources'         => 1,
             'color_background'     => '#0f172a',
             'color_text'           => '#e5e7eb',
-            'color_accent'         => '#22c55e',
+            'color_accent'         => '#fba919',
             'color_border'         => '#94a3b8',
             'custom_css'           => '',
         );
@@ -454,7 +454,7 @@ class AI_Search_Summary {
         // Color settings
         $output['color_background'] = isset($input['color_background']) ? $this->sanitize_color($input['color_background'], '#0f172a') : '#0f172a';
         $output['color_text'] = isset($input['color_text']) ? $this->sanitize_color($input['color_text'], '#e5e7eb') : '#e5e7eb';
-        $output['color_accent'] = isset($input['color_accent']) ? $this->sanitize_color($input['color_accent'], '#22c55e') : '#22c55e';
+        $output['color_accent'] = isset($input['color_accent']) ? $this->sanitize_color($input['color_accent'], '#fba919') : '#fba919';
         $output['color_border'] = isset($input['color_border']) ? $this->sanitize_color($input['color_border'], '#94a3b8') : '#94a3b8';
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
@@ -571,28 +571,26 @@ class AI_Search_Summary {
     private function generate_color_css( $options ) {
         $bg     = isset( $options['color_background'] ) ? $options['color_background'] : '#0f172a';
         $text   = isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb';
-        $accent = isset( $options['color_accent'] ) ? $options['color_accent'] : '#22c55e';
+        $accent = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
         $border = isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8';
 
         // Convert hex to rgba for semi-transparent backgrounds
         $bg_rgb = $this->hex_to_rgb( $bg );
         $border_rgb = $this->hex_to_rgb( $border );
 
-        $bg_rgba = $bg_rgb ? "rgba({$bg_rgb['r']},{$bg_rgb['g']},{$bg_rgb['b']},0.9)" : $bg;
-        $border_rgba = $border_rgb ? "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.5)" : $border;
-        $border_rgba_light = $border_rgb ? "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.8)" : $border;
+        if ( ! $bg_rgb || ! $border_rgb ) {
+            return '';
+        }
 
+        $border_rgba = "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.5)";
+
+        // Target the summary content, not the badge (badge keeps its default dark style)
         $css = "
-.aiss-openai-badge {
-    background: {$bg_rgba};
-    border-color: {$border_rgba};
+.aiss-search-summary-content {
     color: {$text};
 }
-.aiss-openai-mark {
-    border-color: {$border_rgba_light};
-}
-.aiss-openai-mark::after {
-    background: linear-gradient(135deg, {$accent}, {$border});
+.aiss-search-summary-content a {
+    color: {$accent};
 }
 .aiss-sources-toggle {
     color: {$text};
@@ -958,7 +956,7 @@ class AI_Search_Summary {
   height: 14px;
   border-radius: 50%;
   border: 2px solid rgba(148,163,184,0.5);
-  border-top-color: #22c55e;
+  border-top-color: #fba919;
   display: inline-block;
   animation: aiss-spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -1002,7 +1000,7 @@ class AI_Search_Summary {
   position: absolute;
   inset: 2px;
   border-radius: 999px;
-  background: linear-gradient(135deg,#22c55e,#3b82f6);
+  background: linear-gradient(135deg,#fba919,#3b82f6);
 }
 
 .aiss-sources {
@@ -1038,7 +1036,7 @@ class AI_Search_Summary {
 }
 
 .aiss-sources-list a {
-  color: #22c55e;
+  color: #fba919;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -1496,9 +1494,9 @@ class AI_Search_Summary {
                                     <input type="text"
                                            id="aiss-color-accent"
                                            name="<?php echo esc_attr( $this->option_name ); ?>[color_accent]"
-                                           value="<?php echo esc_attr( isset( $options['color_accent'] ) ? $options['color_accent'] : '#22c55e' ); ?>"
+                                           value="<?php echo esc_attr( isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919' ); ?>"
                                            class="aiss-color-picker"
-                                           data-default-color="#22c55e" />
+                                           data-default-color="#fba919" />
                                 </div>
                             </div>
 
@@ -1772,7 +1770,7 @@ class AI_Search_Summary {
                         success: function(response) {
                             btn.prop('disabled', false).text('Refresh Models');
                             if (response.success) {
-                                resultSpan.html('<span style="color: #22c55e;">✓ ' + response.data.message + '</span>');
+                                resultSpan.html('<span style="color: #fba919;">✓ ' + response.data.message + '</span>');
                                 // Reload page to show updated model list
                                 setTimeout(function() { location.reload(); }, 1000);
                             } else {
@@ -1805,7 +1803,7 @@ class AI_Search_Summary {
                         success: function(response) {
                             btn.prop('disabled', false).text('Clear Cache Now');
                             if (response.success) {
-                                resultSpan.html('<span style="color: #22c55e;">✓ ' + response.data.message + '</span>');
+                                resultSpan.html('<span style="color: #fba919;">✓ ' + response.data.message + '</span>');
                             } else {
                                 resultSpan.html('<span style="color: #ef4444;">✗ ' + response.data.message + '</span>');
                             }
@@ -1825,7 +1823,7 @@ class AI_Search_Summary {
                     dark: {
                         background: '#0f172a',
                         text: '#e5e7eb',
-                        accent: '#22c55e',
+                        accent: '#fba919',
                         border: '#94a3b8'
                     },
                     light: {
