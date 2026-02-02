@@ -16,22 +16,22 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 global $wpdb;
 
 // Delete plugin options
-delete_option( 'rt_ai_search_options' );
-delete_option( 'rt_ai_search_models_cache' );
-delete_option( 'rt_ai_search_cache_namespace' );
-delete_option( 'rt_ai_search_cache_keys' ); // Legacy option
-delete_option( 'rt_ai_search_db_version' );
+delete_option( 'aiss_options' );
+delete_option( 'aiss_models_cache' );
+delete_option( 'aiss_cache_namespace' );
+delete_option( 'aiss_cache_keys' ); // Legacy option
+delete_option( 'aiss_db_version' );
 
 // Delete all transients created by the plugin
 // Transients are stored in options table with _transient_ prefix
 $wpdb->query(
     "DELETE FROM {$wpdb->options}
-     WHERE option_name LIKE '_transient_rt_ai_%'
-        OR option_name LIKE '_transient_timeout_rt_ai_%'"
+     WHERE option_name LIKE '_transient_aiss_%'
+        OR option_name LIKE '_transient_timeout_aiss_%'"
 );
 
 // Drop the logs table
-$table_name = $wpdb->prefix . 'rt_ai_search_logs';
+$table_name = $wpdb->prefix . 'aiss_logs';
 $wpdb->query( "DROP TABLE IF EXISTS {$table_name}" );
 
 // Clear any cached data in object cache (if persistent caching is used)
