@@ -840,3 +840,99 @@
     font-size: 0.9em;
     color: #1d1d1f;
 }
+
+/* Color Picker Grid */
+.aiss-color-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+}
+
+.aiss-field-color {
+    border-right: 1px solid #f5f5f7;
+}
+
+.aiss-field-color:nth-child(2n) {
+    border-right: none;
+}
+
+.aiss-field-color:nth-child(n+3) {
+    border-top: none;
+}
+
+.aiss-field-color .aiss-field-label {
+    margin-bottom: 4px;
+}
+
+.aiss-field-color .aiss-field-description {
+    margin: 0 0 8px 0;
+}
+
+/* Color Presets */
+.aiss-color-presets {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.aiss-preset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #f5f5f7;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.aiss-preset-btn:hover {
+    background: #e8e8ed;
+    border-color: #c1c1c7;
+}
+
+.aiss-preset-preview {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 2px solid;
+}
+
+/* WordPress Color Picker Adjustments */
+.aiss-field-color .wp-picker-container {
+    display: flex;
+    align-items: center;
+}
+
+.aiss-field-color .wp-picker-container .wp-color-result {
+    margin: 0;
+    border-radius: 6px;
+}
+
+.aiss-field-color .wp-picker-container input.wp-color-picker {
+    width: 80px !important;
+}
+
+@media (max-width: 600px) {
+    .aiss-color-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .aiss-field-color {
+        border-right: none;
+    }
+
+    .aiss-color-presets {
+        flex-direction: column;
+    }
+
+    .aiss-preset-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

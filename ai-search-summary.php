@@ -388,6 +388,10 @@ class AI_Search_Summary {
             'site_description'     => '',
             'show_openai_badge'    => 1,
             'show_sources'         => 1,
+            'color_background'     => '#0f172a',
+            'color_text'           => '#e5e7eb',
+            'color_accent'         => '#22c55e',
+            'color_border'         => '#94a3b8',
             'custom_css'           => '',
         );
 
@@ -446,6 +450,12 @@ class AI_Search_Summary {
 
         $output['show_openai_badge'] = isset($input['show_openai_badge']) && $input['show_openai_badge'] ? 1 : 0;
         $output['show_sources'] = isset($input['show_sources']) && $input['show_sources'] ? 1 : 0;
+
+        // Color settings
+        $output['color_background'] = isset($input['color_background']) ? $this->sanitize_color($input['color_background'], '#0f172a') : '#0f172a';
+        $output['color_text'] = isset($input['color_text']) ? $this->sanitize_color($input['color_text'], '#e5e7eb') : '#e5e7eb';
+        $output['color_accent'] = isset($input['color_accent']) ? $this->sanitize_color($input['color_accent'], '#22c55e') : '#22c55e';
+        $output['color_border'] = isset($input['color_border']) ? $this->sanitize_color($input['color_border'], '#94a3b8') : '#94a3b8';
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
@@ -526,6 +536,113 @@ class AI_Search_Summary {
         }
 
         return trim( $css );
+    }
+
+    /**
+     * Sanitize a color value.
+     *
+     * @param string $color   The color to sanitize.
+     * @param string $default Default color if invalid.
+     * @return string Sanitized hex color.
+     */
+    private function sanitize_color( $color, $default = '#000000' ) {
+        $color = trim( $color );
+
+        // Use WordPress sanitize_hex_color if available
+        if ( function_exists( 'sanitize_hex_color' ) ) {
+            $sanitized = sanitize_hex_color( $color );
+            return $sanitized ? $sanitized : $default;
+        }
+
+        // Fallback: validate hex color manually
+        if ( preg_match( '/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $color ) ) {
+            return $color;
+        }
+
+        return $default;
+    }
+
+    /**
+     * Generate dynamic CSS for custom colors.
+     *
+     * @param array $options Plugin options.
+     * @return string CSS string.
+     */
+    private function generate_color_css( $options ) {
+        $bg     = isset( $options['color_background'] ) ? $options['color_background'] : '#0f172a';
+        $text   = isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb';
+        $accent = isset( $options['color_accent'] ) ? $options['color_accent'] : '#22c55e';
+        $border = isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8';
+
+        // Convert hex to rgba for semi-transparent backgrounds
+        $bg_rgb = $this->hex_to_rgb( $bg );
+        $border_rgb = $this->hex_to_rgb( $border );
+
+        $bg_rgba = $bg_rgb ? "rgba({$bg_rgb['r']},{$bg_rgb['g']},{$bg_rgb['b']},0.9)" : $bg;
+        $border_rgba = $border_rgb ? "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.5)" : $border;
+        $border_rgba_light = $border_rgb ? "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.8)" : $border;
+
+        $css = "
+.aiss-openai-badge {
+    background: {$bg_rgba};
+    border-color: {$border_rgba};
+    color: {$text};
+}
+.aiss-openai-mark {
+    border-color: {$border_rgba_light};
+}
+.aiss-openai-mark::after {
+    background: linear-gradient(135deg, {$accent}, {$border});
+}
+.aiss-sources-toggle {
+    color: {$text};
+}
+.aiss-sources-list a {
+    color: {$accent};
+}
+.aiss-sources-list span {
+    color: {$text};
+    opacity: 0.8;
+}
+.aiss-spinner {
+    border-color: {$border_rgba};
+    border-top-color: {$accent};
+}
+.aiss-skeleton-line {
+    background-color: {$border_rgba};
+    background-image: linear-gradient(
+        90deg,
+        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4) 25%,
+        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.7) 50%,
+        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4) 75%
+    );
+}";
+
+        return trim( $css );
+    }
+
+    /**
+     * Convert hex color to RGB array.
+     *
+     * @param string $hex Hex color code.
+     * @return array|false RGB array or false on failure.
+     */
+    private function hex_to_rgb( $hex ) {
+        $hex = ltrim( $hex, '#' );
+
+        if ( strlen( $hex ) === 3 ) {
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+
+        if ( strlen( $hex ) !== 6 ) {
+            return false;
+        }
+
+        return array(
+            'r' => hexdec( substr( $hex, 0, 2 ) ),
+            'g' => hexdec( substr( $hex, 2, 2 ) ),
+            'b' => hexdec( substr( $hex, 4, 2 ) ),
+        );
     }
 
     public function add_settings_page() {
@@ -1329,6 +1446,105 @@ class AI_Search_Summary {
                     </div>
                 </div>
 
+                <!-- Section: Appearance -->
+                <div class="aiss-section">
+                    <div class="aiss-section-header">
+                        <h2>Appearance</h2>
+                        <p>Customize the look of AI summaries to match your theme</p>
+                    </div>
+                    <div class="aiss-section-content">
+                        <div class="aiss-color-grid">
+                            <!-- Background Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-background">Background Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-background"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_background]"
+                                           value="<?php echo esc_attr( isset( $options['color_background'] ) ? $options['color_background'] : '#0f172a' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#0f172a" />
+                                </div>
+                            </div>
+
+                            <!-- Text Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-text">Text Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-text"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_text]"
+                                           value="<?php echo esc_attr( isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#e5e7eb" />
+                                </div>
+                            </div>
+
+                            <!-- Accent Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-accent">Accent Color</label>
+                                </div>
+                                <div class="aiss-field-description">
+                                    Used for links and highlights
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-accent"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_accent]"
+                                           value="<?php echo esc_attr( isset( $options['color_accent'] ) ? $options['color_accent'] : '#22c55e' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#22c55e" />
+                                </div>
+                            </div>
+
+                            <!-- Border Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-border">Border Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-border"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_border]"
+                                           value="<?php echo esc_attr( isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#94a3b8" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Color Presets -->
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label>Quick Presets</label>
+                            </div>
+                            <div class="aiss-color-presets">
+                                <button type="button" class="aiss-preset-btn" data-preset="dark">
+                                    <span class="aiss-preset-preview" style="background:#0f172a;border-color:#94a3b8;"></span>
+                                    Dark
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="light">
+                                    <span class="aiss-preset-preview" style="background:#f9fafb;border-color:#6b7280;"></span>
+                                    Light
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="blue">
+                                    <span class="aiss-preset-preview" style="background:#1e3a5f;border-color:#60a5fa;"></span>
+                                    Blue
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="purple">
+                                    <span class="aiss-preset-preview" style="background:#2d1b4e;border-color:#a78bfa;"></span>
+                                    Purple
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Section 2: AI Configuration -->
                 <div class="aiss-section">
                     <div class="aiss-section-header">
@@ -1599,6 +1815,48 @@ class AI_Search_Summary {
                             resultSpan.html('<span style="color: #ef4444;">✗ Request failed. Please try again.</span>');
                         }
                     });
+                });
+
+                // Initialize color pickers
+                $('.aiss-color-picker').wpColorPicker();
+
+                // Color presets
+                var colorPresets = {
+                    dark: {
+                        background: '#0f172a',
+                        text: '#e5e7eb',
+                        accent: '#22c55e',
+                        border: '#94a3b8'
+                    },
+                    light: {
+                        background: '#f9fafb',
+                        text: '#1f2937',
+                        accent: '#059669',
+                        border: '#6b7280'
+                    },
+                    blue: {
+                        background: '#1e3a5f',
+                        text: '#e0f2fe',
+                        accent: '#38bdf8',
+                        border: '#60a5fa'
+                    },
+                    purple: {
+                        background: '#2d1b4e',
+                        text: '#f3e8ff',
+                        accent: '#a78bfa',
+                        border: '#8b5cf6'
+                    }
+                };
+
+                $('.aiss-preset-btn').on('click', function() {
+                    var preset = $(this).data('preset');
+                    if (colorPresets[preset]) {
+                        var colors = colorPresets[preset];
+                        $('#aiss-color-background').wpColorPicker('color', colors.background);
+                        $('#aiss-color-text').wpColorPicker('color', colors.text);
+                        $('#aiss-color-accent').wpColorPicker('color', colors.accent);
+                        $('#aiss-color-border').wpColorPicker('color', colors.border);
+                    }
                 });
             });
         })(jQuery);
@@ -2237,6 +2495,12 @@ class AI_Search_Summary {
             $version
         );
 
+        // Add dynamic color styles
+        $color_css = $this->generate_color_css( $options );
+        if ( ! empty( $color_css ) ) {
+            wp_add_inline_style( 'aiss', $color_css );
+        }
+
         if ( ! empty( $options['custom_css'] ) ) {
             // Defense in depth: sanitize again on output
             $custom_css = $this->sanitize_custom_css( $options['custom_css'] );
@@ -2320,20 +2584,24 @@ class AI_Search_Summary {
             'toplevel_page_aiss-settings',
             'ai-search_page_aiss-analytics',
         );
-        
-        $is_our_page = in_array( $hook, $allowed_hooks, true ) || 
+
+        $is_our_page = in_array( $hook, $allowed_hooks, true ) ||
                        strpos( $hook, 'aiss' ) !== false;
-        
+
         if ( ! $is_our_page ) {
             return;
         }
 
         $version = AI_SEARCH_VERSION;
 
+        // Enqueue WordPress color picker
+        wp_enqueue_style( 'wp-color-picker' );
+        wp_enqueue_script( 'wp-color-picker' );
+
         wp_enqueue_style(
             'aiss-admin',
             plugin_dir_url( __FILE__ ) . 'assets/aiss-admin.css',
-            array(),
+            array( 'wp-color-picker' ),
             $version
         );
     }
