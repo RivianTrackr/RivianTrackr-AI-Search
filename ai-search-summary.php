@@ -1688,31 +1688,6 @@ class AI_Search_Summary {
                             </div>
                         </div>
 
-                        <!-- Color Presets -->
-                        <div class="aiss-field">
-                            <div class="aiss-field-label">
-                                <label>Quick Presets</label>
-                            </div>
-                            <div class="aiss-color-presets">
-                                <button type="button" class="aiss-preset-btn" data-preset="dark">
-                                    <span class="aiss-preset-preview" style="background:#121e2b;border-color:#94a3b8;"></span>
-                                    Dark
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="light">
-                                    <span class="aiss-preset-preview" style="background:#f9fafb;border-color:#6b7280;"></span>
-                                    Light
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="blue">
-                                    <span class="aiss-preset-preview" style="background:#1e3a5f;border-color:#60a5fa;"></span>
-                                    Blue
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="purple">
-                                    <span class="aiss-preset-preview" style="background:#2d1b4e;border-color:#a78bfa;"></span>
-                                    Purple
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Custom CSS -->
                         <div class="aiss-field">
                             <div class="aiss-field-label">
@@ -1843,45 +1818,6 @@ class AI_Search_Summary {
 
                 // Initialize color pickers
                 $('.aiss-color-picker').wpColorPicker();
-
-                // Color presets
-                var colorPresets = {
-                    dark: {
-                        background: '#121e2b',
-                        text: '#e5e7eb',
-                        accent: '#fba919',
-                        border: '#94a3b8'
-                    },
-                    light: {
-                        background: '#f9fafb',
-                        text: '#1f2937',
-                        accent: '#059669',
-                        border: '#6b7280'
-                    },
-                    blue: {
-                        background: '#1e3a5f',
-                        text: '#e0f2fe',
-                        accent: '#38bdf8',
-                        border: '#60a5fa'
-                    },
-                    purple: {
-                        background: '#2d1b4e',
-                        text: '#f3e8ff',
-                        accent: '#a78bfa',
-                        border: '#8b5cf6'
-                    }
-                };
-
-                $('.aiss-preset-btn').on('click', function() {
-                    var preset = $(this).data('preset');
-                    if (colorPresets[preset]) {
-                        var colors = colorPresets[preset];
-                        $('#aiss-color-background').wpColorPicker('color', colors.background);
-                        $('#aiss-color-text').wpColorPicker('color', colors.text);
-                        $('#aiss-color-accent').wpColorPicker('color', colors.accent);
-                        $('#aiss-color-border').wpColorPicker('color', colors.border);
-                    }
-                });
             });
         })(jQuery);
         </script>
