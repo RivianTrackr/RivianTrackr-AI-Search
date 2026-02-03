@@ -44,9 +44,10 @@ class AI_Search_Summary {
     private $cache_prefix;
     private $cache_ttl           = 3600;
 
-    private $logs_table_checked = false;
-    private $logs_table_exists  = false;
-    private $options_cache      = null;
+    private $logs_table_checked  = false;
+    private $logs_table_exists   = false;
+    private $options_cache       = null;
+    private $summary_injected    = false;
 
     public function __construct() {
 
@@ -59,6 +60,7 @@ class AI_Search_Summary {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
+        add_action( 'wp_footer', array( $this, 'inject_ai_summary_fallback' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_filter( 'rest_post_dispatch', array( $this, 'add_rate_limit_headers' ), 10, 3 );
@@ -2554,27 +2556,52 @@ class AI_Search_Summary {
             return;
         }
 
+        if ( $this->summary_injected ) {
+            return;
+        }
+
+        $this->render_summary_widget();
+    }
+
+    /**
+     * Fallback injection via wp_footer for no-results search pages where loop_start never fires.
+     */
+    public function inject_ai_summary_fallback() {
+        if ( $this->summary_injected ) {
+            return;
+        }
+
+        if ( ! is_search() || is_admin() ) {
+            return;
+        }
+
+        // Output the widget in the footer; JS will relocate it into the content area.
+        $this->render_summary_widget( true );
+    }
+
+    /**
+     * Render the AI summary widget HTML.
+     *
+     * @param bool $is_fallback Whether this is the footer fallback (needs JS relocation).
+     */
+    private function render_summary_widget( $is_fallback = false ) {
         $options = $this->get_options();
         if ( empty( $options['enable'] ) || empty( $options['api_key'] ) ) {
             return;
         }
-
-        static $done = false;
-        if ( $done ) {
-            return;
-        }
-        $done = true;
 
         $paged = get_query_var( 'paged' ) ? get_query_var( 'paged' ) : 1;
         if ( $paged > 1 ) {
             return;
         }
 
+        $this->summary_injected = true;
+
         $search_query = get_search_query();
         $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
         $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
         ?>
-        <div class="aiss-summary" style="margin-bottom: 1.5rem;">
+        <div class="aiss-summary<?php echo $is_fallback ? ' aiss-summary-fallback' : ''; ?>" style="margin-bottom: 1.5rem;<?php echo $is_fallback ? ' display:none;' : ''; ?>">
             <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border-width: 1px; border-style: solid; display:flex; flex-direction:column; gap:0.6rem;">
                 <div class="aiss-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
                     <h2 style="margin:0; font-size:1.1rem;">

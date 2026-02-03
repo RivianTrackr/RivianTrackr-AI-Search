@@ -99,11 +99,47 @@
     }
   }
 
+  /**
+   * If the widget was rendered in the footer fallback (no-results page),
+   * relocate it into the main content area and make it visible.
+   */
+  function relocateFallbackWidget() {
+    var widget = document.querySelector('.aiss-summary-fallback');
+    if (!widget) return;
+
+    // Common content-area selectors across popular WordPress themes
+    var selectors = [
+      '.site-main',           // Blocksy, Astra, GeneratePress, TwentyTwenty+
+      'main',                 // HTML5 semantic
+      '#main',                // Classic themes
+      '.content-area',        // Underscores-based themes
+      '#content',             // Starter themes
+      '#primary',             // TwentyTwentyOne, Flavor themes
+      '.search-results',      // Search-specific containers
+    ];
+
+    var target = null;
+    for (var i = 0; i < selectors.length; i++) {
+      target = document.querySelector(selectors[i]);
+      if (target) break;
+    }
+
+    if (target) {
+      target.insertBefore(widget, target.firstChild);
+    }
+
+    widget.classList.remove('aiss-summary-fallback');
+    widget.style.display = '';
+  }
+
   ready(function() {
     if (!window.AISSearch) return;
 
     // Check if server cache was cleared (model changed, etc.) and invalidate browser cache
     checkCacheVersion();
+
+    // Relocate fallback widget from footer into content area (no-results pages)
+    relocateFallbackWidget();
 
     var container = document.getElementById('aiss-search-summary-content');
     if (!container) return;
