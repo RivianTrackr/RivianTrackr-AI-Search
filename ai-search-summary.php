@@ -388,7 +388,7 @@ class AI_Search_Summary {
             'site_description'     => '',
             'show_openai_badge'    => 1,
             'show_sources'         => 1,
-            'color_background'     => '#0f172a',
+            'color_background'     => '#121e2b',
             'color_text'           => '#e5e7eb',
             'color_accent'         => '#fba919',
             'color_border'         => '#94a3b8',
@@ -452,7 +452,7 @@ class AI_Search_Summary {
         $output['show_sources'] = isset($input['show_sources']) && $input['show_sources'] ? 1 : 0;
 
         // Color settings
-        $output['color_background'] = isset($input['color_background']) ? $this->sanitize_color($input['color_background'], '#0f172a') : '#0f172a';
+        $output['color_background'] = isset($input['color_background']) ? $this->sanitize_color($input['color_background'], '#121e2b') : '#121e2b';
         $output['color_text'] = isset($input['color_text']) ? $this->sanitize_color($input['color_text'], '#e5e7eb') : '#e5e7eb';
         $output['color_accent'] = isset($input['color_accent']) ? $this->sanitize_color($input['color_accent'], '#fba919') : '#fba919';
         $output['color_border'] = isset($input['color_border']) ? $this->sanitize_color($input['color_border'], '#94a3b8') : '#94a3b8';
@@ -569,7 +569,7 @@ class AI_Search_Summary {
      * @return string CSS string.
      */
     private function generate_color_css( $options ) {
-        $bg     = isset( $options['color_background'] ) ? $options['color_background'] : '#0f172a';
+        $bg     = isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b';
         $text   = isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb';
         $accent = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
         $border = isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8';
@@ -1489,9 +1489,9 @@ class AI_Search_Summary {
                                     <input type="text"
                                            id="aiss-color-background"
                                            name="<?php echo esc_attr( $this->option_name ); ?>[color_background]"
-                                           value="<?php echo esc_attr( isset( $options['color_background'] ) ? $options['color_background'] : '#0f172a' ); ?>"
+                                           value="<?php echo esc_attr( isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b' ); ?>"
                                            class="aiss-color-picker"
-                                           data-default-color="#0f172a" />
+                                           data-default-color="#121e2b" />
                                 </div>
                             </div>
 
@@ -1551,7 +1551,7 @@ class AI_Search_Summary {
                             </div>
                             <div class="aiss-color-presets">
                                 <button type="button" class="aiss-preset-btn" data-preset="dark">
-                                    <span class="aiss-preset-preview" style="background:#0f172a;border-color:#94a3b8;"></span>
+                                    <span class="aiss-preset-preview" style="background:#121e2b;border-color:#94a3b8;"></span>
                                     Dark
                                 </button>
                                 <button type="button" class="aiss-preset-btn" data-preset="light">
@@ -1849,7 +1849,7 @@ class AI_Search_Summary {
                 // Color presets
                 var colorPresets = {
                     dark: {
-                        background: '#0f172a',
+                        background: '#121e2b',
                         text: '#e5e7eb',
                         accent: '#fba919',
                         border: '#94a3b8'
