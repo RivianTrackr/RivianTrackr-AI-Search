@@ -598,14 +598,33 @@ class AI_Search_Summary {
 .aiss-search-summary-content {
     color: {$text};
 }
-.aiss-search-summary-content a {
+.aiss-search-summary-content a,
+.aiss-search-summary-content a:visited {
     color: {$accent};
+}
+.aiss-search-summary-content a:hover,
+.aiss-search-summary-content a:active,
+.aiss-search-summary-content a:focus {
+    color: {$accent};
+    opacity: 0.8;
 }
 .aiss-sources-toggle {
     color: {$text};
 }
-.aiss-sources-list a {
+.aiss-sources-toggle:hover,
+.aiss-sources-toggle:active,
+.aiss-sources-toggle:focus {
     color: {$accent};
+}
+.aiss-sources-list a,
+.aiss-sources-list a:visited {
+    color: {$accent};
+}
+.aiss-sources-list a:hover,
+.aiss-sources-list a:active,
+.aiss-sources-list a:focus {
+    color: {$accent};
+    opacity: 0.8;
 }
 .aiss-sources-list span {
     color: {$text};
