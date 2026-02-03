@@ -841,20 +841,6 @@
 }
 
 /* Color Picker Fields */
-.aiss-color-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px 32px;
-}
-
-.aiss-field-color {
-    flex: 0 0 auto;
-}
-
-.aiss-field-color .aiss-field-label {
-    margin-bottom: 4px;
-}
-
 .aiss-field-color .aiss-field-description {
     margin: 0 0 8px 0;
 }
