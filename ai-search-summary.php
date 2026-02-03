@@ -20,7 +20,7 @@ define( 'AISS_EXCERPT_LENGTH', 200 );
 define( 'AISS_MAX_SOURCES_DISPLAY', 5 );
 define( 'AISS_API_TIMEOUT', 60 );
 define( 'AISS_RATE_LIMIT_WINDOW', 70 );
-define( 'AISS_MAX_TOKENS', 1500 );
+define( 'AISS_MAX_TOKENS', 1500 ); // Default; overridden by the admin setting
 define( 'AISS_IP_RATE_LIMIT', 10 ); // Requests per minute per IP
 
 // Error codes for structured API responses
@@ -381,8 +381,10 @@ class AI_Search_Summary {
 
         $defaults = array(
             'api_key'              => '',
+            'api_key_valid'        => null,
             'model'                => '',
             'max_posts'            => 20,
+            'max_tokens'           => AISS_MAX_TOKENS,
             'enable'               => 0,
             'max_calls_per_minute' => 30,
             'cache_ttl'            => AISS_DEFAULT_CACHE_TTL,
@@ -419,8 +421,29 @@ class AI_Search_Summary {
         $output['api_key']   = isset($input['api_key']) ? sanitize_text_field( trim($input['api_key']) ) : '';
         $output['model']     = isset($input['model']) ? sanitize_text_field($input['model']) : '';
         $output['max_posts'] = isset($input['max_posts']) ? max(1, intval($input['max_posts'])) : 20;
-        
+
+        // Max tokens: min 500, max 16000, default 1500
+        $output['max_tokens'] = isset($input['max_tokens'])
+            ? max(500, min(16000, intval($input['max_tokens'])))
+            : AISS_MAX_TOKENS;
+
         $output['enable'] = isset($input['enable']) && $input['enable'] ? 1 : 0;
+
+        // Validate API key when it changes
+        $old_options = get_option( $this->option_name, array() );
+        $old_key     = isset( $old_options['api_key'] ) ? $old_options['api_key'] : '';
+        if ( $output['api_key'] !== $old_key && ! empty( $output['api_key'] ) ) {
+            $test = $this->test_api_key( $output['api_key'] );
+            $output['api_key_valid'] = $test['success'] ? true : false;
+            if ( ! $test['success'] ) {
+                add_settings_error( $this->option_name, 'invalid_api_key', 'API key validation failed: ' . $test['message'], 'error' );
+            }
+        } elseif ( ! empty( $output['api_key'] ) ) {
+            // Key unchanged — preserve previous status
+            $output['api_key_valid'] = isset( $old_options['api_key_valid'] ) ? $old_options['api_key_valid'] : null;
+        } else {
+            $output['api_key_valid'] = null;
+        }
         
         $output['max_calls_per_minute'] = isset($input['max_calls_per_minute'])
             ? max(0, intval($input['max_calls_per_minute']))
@@ -462,16 +485,19 @@ class AI_Search_Summary {
 
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
 
-        // Auto-clear cache when model or display settings change
-        $old_options = get_option( $this->option_name, array() );
-        $old_model = isset( $old_options['model'] ) ? $old_options['model'] : '';
+        // Auto-clear cache when model, token limit, or display settings change
+        $old_model       = isset( $old_options['model'] ) ? $old_options['model'] : '';
         $old_show_sources = isset( $old_options['show_sources'] ) ? $old_options['show_sources'] : 1;
+        $old_max_tokens  = isset( $old_options['max_tokens'] ) ? (int) $old_options['max_tokens'] : AISS_MAX_TOKENS;
 
         $cache_invalidating_change = false;
         if ( $output['model'] !== $old_model && ! empty( $output['model'] ) ) {
             $cache_invalidating_change = true;
         }
         if ( $output['show_sources'] !== $old_show_sources ) {
+            $cache_invalidating_change = true;
+        }
+        if ( $output['max_tokens'] !== $old_max_tokens ) {
             $cache_invalidating_change = true;
         }
 
@@ -1350,6 +1376,13 @@ class AI_Search_Summary {
                             <div class="aiss-field-label">
                                 <label for="aiss-api-key">OpenAI API Key</label>
                                 <span class="aiss-field-required">Required</span>
+                                <?php
+                                $key_valid = isset( $options['api_key_valid'] ) ? $options['api_key_valid'] : null;
+                                if ( $this->is_api_key_from_constant() || ( ! empty( $options['api_key'] ) && $key_valid === true ) ) : ?>
+                                    <span style="color: #10b981; font-size: 13px; font-weight: 500; margin-left: 8px;">&#10003; Valid</span>
+                                <?php elseif ( ! empty( $options['api_key'] ) && $key_valid === false ) : ?>
+                                    <span style="color: #ef4444; font-size: 13px; font-weight: 500; margin-left: 8px;">&#10007; Invalid</span>
+                                <?php endif; ?>
                             </div>
                             <?php if ( $this->is_api_key_from_constant() ) : ?>
                                 <div class="aiss-field-description" style="background: #d1fae5; border: 1px solid #10b981; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
@@ -1534,11 +1567,30 @@ class AI_Search_Summary {
                                 Number of posts to send as context (more posts = better answers, higher cost)
                             </div>
                             <div class="aiss-field-input">
-                                <input type="number" 
+                                <input type="number"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[max_posts]"
                                        value="<?php echo esc_attr( $options['max_posts'] ); ?>"
-                                       min="1" 
+                                       min="1"
                                        max="50" />
+                            </div>
+                        </div>
+
+                        <!-- Max Tokens -->
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label>Max Response Tokens</label>
+                            </div>
+                            <div class="aiss-field-description">
+                                Maximum tokens in the AI response (500 &ndash; 16,000). Lower values = shorter answers and lower cost.
+                            </div>
+                            <div class="aiss-field-input">
+                                <input type="number"
+                                       name="<?php echo esc_attr( $this->option_name ); ?>[max_tokens]"
+                                       value="<?php echo esc_attr( isset( $options['max_tokens'] ) ? $options['max_tokens'] : AISS_MAX_TOKENS ); ?>"
+                                       min="500"
+                                       max="16000"
+                                       step="100" />
+                                <span style="margin-left: 8px; color: #86868b; font-size: 14px;">tokens</span>
                             </div>
                         </div>
                     </div>
@@ -3308,15 +3360,16 @@ class AI_Search_Summary {
             ),
         );
 
+        // Use the admin-configured max tokens setting
+        $configured_tokens = isset( $options['max_tokens'] ) ? (int) $options['max_tokens'] : AISS_MAX_TOKENS;
+
         // Newer models (gpt-5, o1, o3) use max_completion_tokens instead of max_tokens
         // These models also use "reasoning tokens" which count against the limit,
         // so we need a much higher limit to leave room for actual output
         if ( $is_gpt5 || $is_o_series ) {
-            // Reasoning models need higher limits: reasoning tokens + output tokens
-            // Using 16000 to allow for extensive reasoning while still getting output
-            $body['max_completion_tokens'] = 16000;
+            $body['max_completion_tokens'] = max( $configured_tokens, 16000 );
         } else {
-            $body['max_tokens'] = AISS_MAX_TOKENS;
+            $body['max_tokens'] = $configured_tokens;
         }
 
         // o-series (reasoning models) don't support temperature
