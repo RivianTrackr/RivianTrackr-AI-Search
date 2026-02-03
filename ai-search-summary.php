@@ -576,9 +576,10 @@ class AI_Search_Summary {
 
         // Convert hex to rgba for semi-transparent backgrounds
         $bg_rgb = $this->hex_to_rgb( $bg );
+        $text_rgb = $this->hex_to_rgb( $text );
         $border_rgb = $this->hex_to_rgb( $border );
 
-        if ( ! $bg_rgb || ! $border_rgb ) {
+        if ( ! $bg_rgb || ! $text_rgb || ! $border_rgb ) {
             return '';
         }
 
@@ -635,16 +636,16 @@ class AI_Search_Summary {
     opacity: 0.8;
 }
 .aiss-spinner {
-    border-color: {$border_rgba};
+    border-color: rgba({$text_rgb['r']},{$text_rgb['g']},{$text_rgb['b']},0.3);
     border-top-color: {$accent};
 }
 .aiss-skeleton-line {
-    background-color: {$border_rgba};
+    background-color: rgba({$text_rgb['r']},{$text_rgb['g']},{$text_rgb['b']},0.15);
     background-image: linear-gradient(
         90deg,
-        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4) 25%,
-        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.7) 50%,
-        rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4) 75%
+        rgba({$text_rgb['r']},{$text_rgb['g']},{$text_rgb['b']},0.1) 25%,
+        rgba({$text_rgb['r']},{$text_rgb['g']},{$text_rgb['b']},0.25) 50%,
+        rgba({$text_rgb['r']},{$text_rgb['g']},{$text_rgb['b']},0.1) 75%
     );
 }";
 
