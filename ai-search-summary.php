@@ -582,21 +582,49 @@ class AI_Search_Summary {
             return '';
         }
 
-        $border_rgba = "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.5)";
+        $border_rgba = "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4)";
 
-        // Target the summary content, not the badge (badge keeps its default dark style)
+        // Target the summary container and content (badge keeps its default dark style)
         $css = "
+.aiss-summary-inner {
+    background-color: {$bg};
+    border-color: {$border_rgba};
+}
+.aiss-summary-inner,
+.aiss-summary-inner .aiss-summary-header h2,
+.aiss-summary-inner .aiss-disclaimer {
+    color: {$text};
+}
 .aiss-search-summary-content {
     color: {$text};
 }
-.aiss-search-summary-content a {
+.aiss-search-summary-content a,
+.aiss-search-summary-content a:visited {
     color: {$accent};
+}
+.aiss-search-summary-content a:hover,
+.aiss-search-summary-content a:active,
+.aiss-search-summary-content a:focus {
+    color: {$accent};
+    opacity: 0.8;
 }
 .aiss-sources-toggle {
     color: {$text};
 }
-.aiss-sources-list a {
+.aiss-sources-toggle:hover,
+.aiss-sources-toggle:active,
+.aiss-sources-toggle:focus {
     color: {$accent};
+}
+.aiss-sources-list a,
+.aiss-sources-list a:visited {
+    color: {$accent};
+}
+.aiss-sources-list a:hover,
+.aiss-sources-list a:active,
+.aiss-sources-list a:focus {
+    color: {$accent};
+    opacity: 0.8;
 }
 .aiss-sources-list span {
     color: {$text};
@@ -2551,7 +2579,7 @@ class AI_Search_Summary {
         $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
         ?>
         <div class="aiss-summary" style="margin-bottom: 1.5rem;">
-            <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
+            <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border-width: 1px; border-style: solid; display:flex; flex-direction:column; gap:0.6rem;">
                 <div class="aiss-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
