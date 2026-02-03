@@ -140,6 +140,7 @@ class AI_Search_Summary {
             ai_success tinyint(1) NOT NULL DEFAULT 0,
             ai_error text NULL,
             cache_hit tinyint(1) NULL DEFAULT NULL,
+            response_time_ms int unsigned NULL DEFAULT NULL,
             created_at datetime NOT NULL,
             PRIMARY KEY  (id),
             KEY created_at (created_at),
@@ -235,6 +236,17 @@ class AI_Search_Summary {
             }
         }
 
+        // Add response_time_ms column if missing
+        if ( ! in_array( 'response_time_ms', $column_names, true ) ) {
+            $wpdb->query(
+                "ALTER TABLE {$table_escaped}
+                 ADD COLUMN response_time_ms int unsigned NULL DEFAULT NULL AFTER cache_hit"
+            );
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[AI Search Summary] Added response_time_ms column' );
+            }
+        }
+
         return true;
     }
 
@@ -310,7 +322,7 @@ class AI_Search_Summary {
         return $deleted;
     }
 
-    private function log_search_event( $search_query, $results_count, $ai_success, $ai_error = '', $cache_hit = null ) {
+    private function log_search_event( $search_query, $results_count, $ai_success, $ai_error = '', $cache_hit = null, $response_time_ms = null ) {
         if ( empty( $search_query ) ) {
             return;
         }
@@ -325,12 +337,13 @@ class AI_Search_Summary {
         $now = current_time( 'mysql' );
 
         $data = array(
-            'search_query'  => $search_query,
-            'results_count' => (int) $results_count,
-            'ai_success'    => $ai_success ? 1 : 0,
-            'ai_error'      => $ai_error,
-            'cache_hit'     => $cache_hit,
-            'created_at'    => $now,
+            'search_query'    => $search_query,
+            'results_count'   => (int) $results_count,
+            'ai_success'      => $ai_success ? 1 : 0,
+            'ai_error'        => $ai_error,
+            'cache_hit'       => $cache_hit,
+            'response_time_ms' => $response_time_ms,
+            'created_at'      => $now,
         );
 
         $formats = array(
@@ -339,6 +352,7 @@ class AI_Search_Summary {
             '%d',
             '%s',
             $cache_hit === null ? null : '%d',
+            $response_time_ms === null ? '%s' : '%d',
             '%s',
         );
 
@@ -348,6 +362,10 @@ class AI_Search_Summary {
             $data['cache_hit'] = null;
         } else {
             $data['cache_hit'] = $cache_hit ? 1 : 0;
+        }
+
+        if ( $response_time_ms !== null ) {
+            $data['response_time_ms'] = (int) $response_time_ms;
         }
 
         $result = $wpdb->insert(
@@ -2026,7 +2044,8 @@ class AI_Search_Summary {
                 SUM(ai_success) AS success_count,
                 SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count,
                 SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
-                SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
+                SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses,
+                AVG(response_time_ms) AS avg_response_time
              FROM {$table_escaped}"
         );
 
@@ -2035,6 +2054,7 @@ class AI_Search_Summary {
         $error_count         = $totals ? (int) $totals->error_count : 0;
         $cache_hits          = $totals ? (int) $totals->cache_hits : 0;
         $cache_misses        = $totals ? (int) $totals->cache_misses : 0;
+        $avg_response_time   = $totals && $totals->avg_response_time !== null ? (int) round( (float) $totals->avg_response_time ) : null;
         $cache_total         = $cache_hits + $cache_misses;
         $cache_hit_rate      = $cache_total > 0 ? round( ( $cache_hits / $cache_total ) * 100, 1 ) : 0;
         $success_rate        = $this->calculate_success_rate( $success_count, $total_searches );
@@ -2122,6 +2142,20 @@ class AI_Search_Summary {
             <div class="aiss-stat-card">
                 <div class="aiss-stat-label">No Results</div>
                 <div class="aiss-stat-value"><?php echo number_format( $no_results_count ); ?></div>
+            </div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Avg Response Time</div>
+                <div class="aiss-stat-value"><?php
+                    if ( $avg_response_time !== null ) {
+                        if ( $avg_response_time >= 1000 ) {
+                            echo esc_html( number_format( $avg_response_time / 1000, 1 ) . 's' );
+                        } else {
+                            echo esc_html( $avg_response_time . 'ms' );
+                        }
+                    } else {
+                        echo '&mdash;';
+                    }
+                ?></div>
             </div>
         </div>
 
@@ -2278,6 +2312,7 @@ class AI_Search_Summary {
                                     <th>Query</th>
                                     <th>Status</th>
                                     <th>Cache</th>
+                                    <th>Time</th>
                                     <th>Error</th>
                                     <th>Date</th>
                                 </tr>
@@ -2306,6 +2341,18 @@ class AI_Search_Summary {
                                                 <span class="aiss-badge aiss-badge-muted">N/A</span>
                                             <?php endif; ?>
                                         </td>
+                                        <td class="aiss-date-cell"><?php
+                                            if ( isset( $event->response_time_ms ) && $event->response_time_ms !== null ) {
+                                                $rt = (int) $event->response_time_ms;
+                                                if ( $rt >= 1000 ) {
+                                                    echo esc_html( number_format( $rt / 1000, 1 ) . 's' );
+                                                } else {
+                                                    echo esc_html( $rt . 'ms' );
+                                                }
+                                            } else {
+                                                echo '&mdash;';
+                                            }
+                                        ?></td>
                                         <td class="aiss-error-cell" <?php if ( ! empty( $event->ai_error ) ) : ?>title="<?php echo esc_attr( $event->ai_error ); ?>"<?php endif; ?>>
                                             <?php echo esc_html( $event->ai_error ); ?>
                                         </td>
@@ -2414,13 +2461,14 @@ class AI_Search_Summary {
         $table_escaped = self::get_escaped_table_name();
 
         $totals = $wpdb->get_row(
-            "SELECT COUNT(*) AS total, SUM(ai_success) AS success_count
+            "SELECT COUNT(*) AS total, SUM(ai_success) AS success_count, AVG(response_time_ms) AS avg_response_time
              FROM {$table_escaped}"
         );
 
-        $total_searches = $totals ? (int) $totals->total : 0;
-        $success_count  = $totals ? (int) $totals->success_count : 0;
-        $success_rate   = $this->calculate_success_rate( $success_count, $total_searches );
+        $total_searches     = $totals ? (int) $totals->total : 0;
+        $success_count      = $totals ? (int) $totals->success_count : 0;
+        $success_rate       = $this->calculate_success_rate( $success_count, $total_searches );
+        $widget_avg_rt      = $totals && $totals->avg_response_time !== null ? (int) round( (float) $totals->avg_response_time ) : null;
 
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
         $last_24   = (int) $wpdb->get_var(
@@ -2453,6 +2501,20 @@ class AI_Search_Summary {
                 <div class="aiss-widget-stat">
                     <span class="aiss-widget-stat-value"><?php echo number_format( $last_24 ); ?></span>
                     <span class="aiss-widget-stat-label">Last 24 Hours</span>
+                </div>
+                <div class="aiss-widget-stat">
+                    <span class="aiss-widget-stat-value"><?php
+                        if ( $widget_avg_rt !== null ) {
+                            if ( $widget_avg_rt >= 1000 ) {
+                                echo esc_html( number_format( $widget_avg_rt / 1000, 1 ) . 's' );
+                            } else {
+                                echo esc_html( $widget_avg_rt . 'ms' );
+                            }
+                        } else {
+                            echo '&mdash;';
+                        }
+                    ?></span>
+                    <span class="aiss-widget-stat-label">Avg Response</span>
                 </div>
             </div>
 
@@ -3122,10 +3184,12 @@ class AI_Search_Summary {
 
         $ai_error      = '';
         $cache_hit     = null;
+        $start_time    = microtime( true );
         $ai_data       = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error, $cache_hit );
+        $response_time_ms = (int) round( ( microtime( true ) - $start_time ) * 1000 );
 
         if ( ! $ai_data ) {
-            $this->log_search_event( $search_query, $results_count, 0, $ai_error ? $ai_error : 'AI summary not available', $cache_hit );
+            $this->log_search_event( $search_query, $results_count, 0, $ai_error ? $ai_error : 'AI summary not available', $cache_hit, $response_time_ms );
 
             return rest_ensure_response(
                 array(
@@ -3136,7 +3200,7 @@ class AI_Search_Summary {
             );
         }
 
-        $this->log_search_event( $search_query, $results_count, 1, '', $cache_hit );
+        $this->log_search_event( $search_query, $results_count, 1, '', $cache_hit, $response_time_ms );
 
         $answer_html = isset( $ai_data['answer_html'] ) ? (string) $ai_data['answer_html'] : '';
         $sources     = isset( $ai_data['results'] ) && is_array( $ai_data['results'] ) ? $ai_data['results'] : array();
