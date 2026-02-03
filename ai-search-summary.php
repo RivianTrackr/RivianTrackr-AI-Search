@@ -582,10 +582,19 @@ class AI_Search_Summary {
             return '';
         }
 
-        $border_rgba = "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.5)";
+        $border_rgba = "rgba({$border_rgb['r']},{$border_rgb['g']},{$border_rgb['b']},0.4)";
 
-        // Target the summary content, not the badge (badge keeps its default dark style)
+        // Target the summary container and content (badge keeps its default dark style)
         $css = "
+.aiss-summary-inner {
+    background-color: {$bg};
+    border-color: {$border_rgba} !important;
+}
+.aiss-summary-inner,
+.aiss-summary-inner .aiss-summary-header h2,
+.aiss-summary-inner .aiss-disclaimer {
+    color: {$text};
+}
 .aiss-search-summary-content {
     color: {$text};
 }
