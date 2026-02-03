@@ -337,35 +337,25 @@ class AI_Search_Summary {
         $now = current_time( 'mysql' );
 
         $data = array(
-            'search_query'    => $search_query,
-            'results_count'   => (int) $results_count,
-            'ai_success'      => $ai_success ? 1 : 0,
-            'ai_error'        => $ai_error,
-            'cache_hit'       => $cache_hit,
-            'response_time_ms' => $response_time_ms,
-            'created_at'      => $now,
+            'search_query'  => $search_query,
+            'results_count' => (int) $results_count,
+            'ai_success'    => $ai_success ? 1 : 0,
+            'ai_error'      => $ai_error,
+            'created_at'    => $now,
         );
 
-        $formats = array(
-            '%s',
-            '%d',
-            '%d',
-            '%s',
-            $cache_hit === null ? null : '%d',
-            $response_time_ms === null ? '%s' : '%d',
-            '%s',
-        );
+        $formats = array( '%s', '%d', '%d', '%s', '%s' );
 
-        // Remove null format for cache_hit if null value
-        if ( $cache_hit === null ) {
-            $formats[4] = '%s'; // Will be stored as NULL
-            $data['cache_hit'] = null;
-        } else {
+        // Only include nullable columns when they have values,
+        // so MySQL uses DEFAULT NULL instead of receiving an empty string.
+        if ( $cache_hit !== null ) {
             $data['cache_hit'] = $cache_hit ? 1 : 0;
+            $formats[]         = '%d';
         }
 
         if ( $response_time_ms !== null ) {
             $data['response_time_ms'] = (int) $response_time_ms;
+            $formats[]                = '%d';
         }
 
         $result = $wpdb->insert(
