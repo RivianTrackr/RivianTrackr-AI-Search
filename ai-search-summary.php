@@ -595,6 +595,10 @@ class AI_Search_Summary {
 .aiss-summary-inner .aiss-disclaimer {
     color: {$text};
 }
+.aiss-openai-badge,
+.aiss-openai-badge .aiss-openai-text {
+    color: #e5e7eb;
+}
 .aiss-search-summary-content {
     color: {$text};
 }
@@ -1472,105 +1476,6 @@ class AI_Search_Summary {
                     </div>
                 </div>
 
-                <!-- Section: Appearance -->
-                <div class="aiss-section">
-                    <div class="aiss-section-header">
-                        <h2>Appearance</h2>
-                        <p>Customize the look of AI summaries to match your theme</p>
-                    </div>
-                    <div class="aiss-section-content">
-                        <div class="aiss-color-grid">
-                            <!-- Background Color -->
-                            <div class="aiss-field aiss-field-color">
-                                <div class="aiss-field-label">
-                                    <label for="aiss-color-background">Background Color</label>
-                                </div>
-                                <div class="aiss-field-input">
-                                    <input type="text"
-                                           id="aiss-color-background"
-                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_background]"
-                                           value="<?php echo esc_attr( isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b' ); ?>"
-                                           class="aiss-color-picker"
-                                           data-default-color="#121e2b" />
-                                </div>
-                            </div>
-
-                            <!-- Text Color -->
-                            <div class="aiss-field aiss-field-color">
-                                <div class="aiss-field-label">
-                                    <label for="aiss-color-text">Text Color</label>
-                                </div>
-                                <div class="aiss-field-input">
-                                    <input type="text"
-                                           id="aiss-color-text"
-                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_text]"
-                                           value="<?php echo esc_attr( isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb' ); ?>"
-                                           class="aiss-color-picker"
-                                           data-default-color="#e5e7eb" />
-                                </div>
-                            </div>
-
-                            <!-- Accent Color -->
-                            <div class="aiss-field aiss-field-color">
-                                <div class="aiss-field-label">
-                                    <label for="aiss-color-accent">Accent Color</label>
-                                </div>
-                                <div class="aiss-field-description">
-                                    Used for links and highlights
-                                </div>
-                                <div class="aiss-field-input">
-                                    <input type="text"
-                                           id="aiss-color-accent"
-                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_accent]"
-                                           value="<?php echo esc_attr( isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919' ); ?>"
-                                           class="aiss-color-picker"
-                                           data-default-color="#fba919" />
-                                </div>
-                            </div>
-
-                            <!-- Border Color -->
-                            <div class="aiss-field aiss-field-color">
-                                <div class="aiss-field-label">
-                                    <label for="aiss-color-border">Border Color</label>
-                                </div>
-                                <div class="aiss-field-input">
-                                    <input type="text"
-                                           id="aiss-color-border"
-                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_border]"
-                                           value="<?php echo esc_attr( isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8' ); ?>"
-                                           class="aiss-color-picker"
-                                           data-default-color="#94a3b8" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Color Presets -->
-                        <div class="aiss-field">
-                            <div class="aiss-field-label">
-                                <label>Quick Presets</label>
-                            </div>
-                            <div class="aiss-color-presets">
-                                <button type="button" class="aiss-preset-btn" data-preset="dark">
-                                    <span class="aiss-preset-preview" style="background:#121e2b;border-color:#94a3b8;"></span>
-                                    Dark
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="light">
-                                    <span class="aiss-preset-preview" style="background:#f9fafb;border-color:#6b7280;"></span>
-                                    Light
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="blue">
-                                    <span class="aiss-preset-preview" style="background:#1e3a5f;border-color:#60a5fa;"></span>
-                                    Blue
-                                </button>
-                                <button type="button" class="aiss-preset-btn" data-preset="purple">
-                                    <span class="aiss-preset-preview" style="background:#2d1b4e;border-color:#a78bfa;"></span>
-                                    Purple
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Section 2: AI Configuration -->
                 <div class="aiss-section">
                     <div class="aiss-section-header">
@@ -1712,10 +1617,100 @@ class AI_Search_Summary {
                 <div class="aiss-section">
                     <div class="aiss-section-header">
                         <h2>Appearance</h2>
-                        <p>Customize how the AI search summary looks on your site</p>
+                        <p>Customize the look of AI summaries to match your theme</p>
                     </div>
                     <div class="aiss-section-content">
-                        <!-- Custom CSS Only -->
+                        <div class="aiss-color-grid">
+                            <!-- Background Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-background">Background Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-background"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_background]"
+                                           value="<?php echo esc_attr( isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#121e2b" />
+                                </div>
+                            </div>
+
+                            <!-- Text Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-text">Text Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-text"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_text]"
+                                           value="<?php echo esc_attr( isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#e5e7eb" />
+                                </div>
+                            </div>
+
+                            <!-- Accent Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-accent">Accent Color</label>
+                                </div>
+                                <div class="aiss-field-description">
+                                    Used for links and highlights
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-accent"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_accent]"
+                                           value="<?php echo esc_attr( isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#fba919" />
+                                </div>
+                            </div>
+
+                            <!-- Border Color -->
+                            <div class="aiss-field aiss-field-color">
+                                <div class="aiss-field-label">
+                                    <label for="aiss-color-border">Border Color</label>
+                                </div>
+                                <div class="aiss-field-input">
+                                    <input type="text"
+                                           id="aiss-color-border"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[color_border]"
+                                           value="<?php echo esc_attr( isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8' ); ?>"
+                                           class="aiss-color-picker"
+                                           data-default-color="#94a3b8" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Color Presets -->
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label>Quick Presets</label>
+                            </div>
+                            <div class="aiss-color-presets">
+                                <button type="button" class="aiss-preset-btn" data-preset="dark">
+                                    <span class="aiss-preset-preview" style="background:#121e2b;border-color:#94a3b8;"></span>
+                                    Dark
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="light">
+                                    <span class="aiss-preset-preview" style="background:#f9fafb;border-color:#6b7280;"></span>
+                                    Light
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="blue">
+                                    <span class="aiss-preset-preview" style="background:#1e3a5f;border-color:#60a5fa;"></span>
+                                    Blue
+                                </button>
+                                <button type="button" class="aiss-preset-btn" data-preset="purple">
+                                    <span class="aiss-preset-preview" style="background:#2d1b4e;border-color:#a78bfa;"></span>
+                                    Purple
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Custom CSS -->
                         <div class="aiss-field">
                             <div class="aiss-field-label">
                                 <label>Custom CSS</label>
