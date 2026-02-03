@@ -461,9 +461,9 @@ class AI_Search_Summary {
             $output['cache_ttl'] = AISS_DEFAULT_CACHE_TTL;
         }
 
-        // Request timeout: min 10 seconds, max 120 seconds, default 60
+        // Request timeout: min 10 seconds, max 300 seconds, default 60
         $output['request_timeout'] = isset($input['request_timeout'])
-            ? max(10, min(120, intval($input['request_timeout'])))
+            ? max(10, min(300, intval($input['request_timeout'])))
             : 60;
 
         // Site name and description for AI prompt
@@ -1653,14 +1653,14 @@ class AI_Search_Summary {
                                 <label>Request Timeout</label>
                             </div>
                             <div class="aiss-field-description">
-                                How long to wait for AI response before timing out (10-120 seconds). Increase for slower reasoning models.
+                                How long to wait for AI response before timing out (10-300 seconds). Reasoning models like GPT-5, o1, and o3 may need 120-300 seconds.
                             </div>
                             <div class="aiss-field-input">
                                 <input type="number"
                                        name="<?php echo esc_attr( $this->option_name ); ?>[request_timeout]"
                                        value="<?php echo esc_attr( isset( $options['request_timeout'] ) ? $options['request_timeout'] : 60 ); ?>"
                                        min="10"
-                                       max="120"
+                                       max="300"
                                        step="5" />
                                 <span style="margin-left: 8px; color: #86868b; font-size: 14px;">seconds</span>
                             </div>
@@ -3387,7 +3387,7 @@ class AI_Search_Summary {
                 'Content-Type'  => 'application/json',
             ),
             'body'    => wp_json_encode( $body ),
-            'timeout' => AISS_API_TIMEOUT,
+            'timeout' => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : AISS_API_TIMEOUT,
         );
 
         // Retry logic: attempt up to 3 times with exponential backoff for transient errors
