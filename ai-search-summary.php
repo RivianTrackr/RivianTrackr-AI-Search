@@ -588,7 +588,7 @@ class AI_Search_Summary {
         $css = "
 .aiss-summary-inner {
     background-color: {$bg};
-    border-color: {$border_rgba} !important;
+    border-color: {$border_rgba};
 }
 .aiss-summary-inner,
 .aiss-summary-inner .aiss-summary-header h2,
@@ -2560,7 +2560,7 @@ class AI_Search_Summary {
         $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
         ?>
         <div class="aiss-summary" style="margin-bottom: 1.5rem;">
-            <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border: 1px solid rgba(148,163,184,0.4); display:flex; flex-direction:column; gap:0.6rem;">
+            <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border-width: 1px; border-style: solid; display:flex; flex-direction:column; gap:0.6rem;">
                 <div class="aiss-summary-header" style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem;">
                     <h2 style="margin:0; font-size:1.1rem;">
                         AI summary for "<?php echo esc_html( $search_query ); ?>"
