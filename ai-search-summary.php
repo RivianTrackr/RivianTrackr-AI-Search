@@ -3047,6 +3047,24 @@ class AI_Search_Summary {
         }
 
         $results_count = count( $posts_for_ai );
+
+        // Short-circuit when no articles match — log the search but skip the API call.
+        if ( 0 === $results_count ) {
+            $this->log_search_event( $search_query, 0, 0, 'No matching articles found', null );
+
+            $options   = $this->get_options();
+            $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
+
+            return rest_ensure_response(
+                array(
+                    'answer_html'   => '',
+                    'results_count' => 0,
+                    'error'         => 'No articles on ' . $site_name . ' matched your search. Try different keywords or a broader search term.',
+                    'error_code'    => AISS_ERROR_NO_RESULTS,
+                )
+            );
+        }
+
         $ai_error      = '';
         $cache_hit     = null;
         $ai_data       = $this->get_ai_data_for_search( $search_query, $posts_for_ai, $ai_error, $cache_hit );

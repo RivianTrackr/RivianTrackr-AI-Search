@@ -180,6 +180,10 @@
         }
 
         if (data && data.error) {
+          // Cache no-results responses so we don't re-hit the server
+          if (data.error_code === 'no_results') {
+            saveToCache(q, data);
+          }
           var errorP = document.createElement('p');
           errorP.setAttribute('role', 'alert');
           errorP.style.cssText = 'margin:0; opacity:0.8;';
