@@ -826,7 +826,7 @@ class AI_Search_Summary {
         }
 
         // Get API key - use constant if specified, otherwise from POST
-        $api_key = isset( $_POST['api_key'] ) ? trim( $_POST['api_key'] ) : '';
+        $api_key = isset( $_POST['api_key'] ) ? sanitize_text_field( trim( $_POST['api_key'] ) ) : '';
 
         if ( $api_key === '__USE_CONSTANT__' ) {
             if ( $this->is_api_key_from_constant() ) {
