@@ -61,6 +61,7 @@ class AI_Search_Summary {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'wp_dashboard_setup', array( $this, 'register_dashboard_widget' ) );
         add_action( 'loop_start', array( $this, 'inject_ai_summary_placeholder' ) );
+        add_action( 'template_redirect', array( $this, 'log_no_results_search' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
         add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
         add_filter( 'rest_post_dispatch', array( $this, 'add_rate_limit_headers' ), 10, 3 );
@@ -2634,6 +2635,28 @@ class AI_Search_Summary {
         );
     }
 
+    /**
+     * Log searches that return no results server-side, since the widget
+     * is not rendered and JS never fires the REST endpoint.
+     */
+    public function log_no_results_search() {
+        if ( ! is_search() || is_admin() ) {
+            return;
+        }
+
+        global $wp_query;
+        if ( $wp_query->found_posts > 0 ) {
+            return;
+        }
+
+        $search_query = get_search_query();
+        if ( empty( $search_query ) ) {
+            return;
+        }
+
+        $this->log_search_event( $search_query, 0, 0, 'No matching articles found', null );
+    }
+
     public function inject_ai_summary_placeholder( $query ) {
         if ( ! $query->is_main_query() || ! $query->is_search() || is_admin() ) {
             return;
@@ -3138,8 +3161,6 @@ class AI_Search_Summary {
 
         // Short-circuit when no articles match — log the search but skip the API call.
         if ( 0 === $results_count ) {
-            $this->log_search_event( $search_query, 0, 0, 'No matching articles found', null );
-
             $options   = $this->get_options();
             $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
 
