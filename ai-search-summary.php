@@ -1152,7 +1152,7 @@ class AI_Search_Summary {
                 'headers' => array(
                     'Authorization' => 'Bearer ' . $api_key,
                 ),
-                'timeout' => 15,
+                'timeout' => 5, // Short timeout to avoid blocking admin page render
             )
         );
 
@@ -2538,10 +2538,10 @@ class AI_Search_Summary {
                                 ?>
                                 <tr>
                                     <td class="aiss-widget-query">
-                                        <?php 
+                                        <?php
                                         $query_display = esc_html( $row->search_query );
-                                        if ( strlen( $query_display ) > 35 ) {
-                                            $query_display = substr( $query_display, 0, 32 ) . '...';
+                                        if ( mb_strlen( $query_display ) > 35 ) {
+                                            $query_display = mb_substr( $query_display, 0, 32 ) . '...';
                                         }
                                         echo $query_display;
                                         ?>
@@ -2811,6 +2811,8 @@ class AI_Search_Summary {
     /**
      * Check if an IP is rate limited and track the request.
      *
+     * Uses a sliding window algorithm to prevent burst abuse at window boundaries.
+     *
      * @param string $ip Client IP address.
      * @return bool True if rate limited.
      */
@@ -2821,9 +2823,11 @@ class AI_Search_Summary {
             return true;
         }
 
-        // Increment the counter
-        $key = 'aiss_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
-        set_transient( $key, $rate_info['used'] + 1, AISS_RATE_LIMIT_WINDOW );
+        // Increment the current window counter
+        $window      = (int) floor( time() / 60 );
+        $current_key = 'aiss_ip_rate_' . md5( $ip ) . '_' . $window;
+        $current     = (int) get_transient( $current_key );
+        set_transient( $current_key, $current + 1, AISS_RATE_LIMIT_WINDOW );
 
         return false;
     }
@@ -2831,24 +2835,36 @@ class AI_Search_Summary {
     /**
      * Get rate limit information for an IP.
      *
+     * Uses sliding window: weights previous window by elapsed time to prevent
+     * burst abuse at minute boundaries (e.g., 10 requests at :59 + 10 at :00).
+     *
      * @param string $ip Client IP address.
      * @return array Rate limit info with 'limit', 'remaining', 'used', and 'reset' keys.
      */
     private function get_rate_limit_info( $ip ) {
-        $key   = 'aiss_ip_rate_' . md5( $ip ) . '_' . gmdate( 'YmdHi' );
-        $limit = AISS_IP_RATE_LIMIT;
-        $used  = (int) get_transient( $key );
+        $limit   = AISS_IP_RATE_LIMIT;
+        $window  = (int) floor( time() / 60 );
+        $ip_hash = md5( $ip );
 
-        // Reset time is the start of the next minute
-        $current_minute = (int) gmdate( 'i' );
-        $current_second = (int) gmdate( 's' );
-        $reset_in = 60 - $current_second;
+        $current_key = 'aiss_ip_rate_' . $ip_hash . '_' . $window;
+        $prev_key    = 'aiss_ip_rate_' . $ip_hash . '_' . ( $window - 1 );
+
+        $current_count = (int) get_transient( $current_key );
+        $prev_count    = (int) get_transient( $prev_key );
+
+        // Sliding window: weight previous window inversely by elapsed seconds
+        $elapsed_seconds = time() % 60;
+        $prev_weight     = ( 60 - $elapsed_seconds ) / 60;
+        $weighted_used   = $current_count + ( $prev_count * $prev_weight );
+
+        // Round up to be conservative (deny borderline cases)
+        $effective_used = (int) ceil( $weighted_used );
 
         return array(
             'limit'     => $limit,
-            'remaining' => max( 0, $limit - $used ),
-            'used'      => $used,
-            'reset'     => time() + $reset_in,
+            'remaining' => max( 0, $limit - $effective_used ),
+            'used'      => $effective_used,
+            'reset'     => time() + ( 60 - $elapsed_seconds ),
         );
     }
 

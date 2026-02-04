@@ -136,15 +136,17 @@
 
     var endpoint = window.AISSearch.endpoint + '?q=' + encodeURIComponent(q);
 
-    // Set timeout (configurable via admin settings, default 60 seconds)
+    // Set timeout with AbortController to actually cancel the request
     var timeoutMs = (window.AISSearch.requestTimeout || 60) * 1000;
+    var abortController = new AbortController();
     var timeoutId = setTimeout(function() {
+      abortController.abort();
       container.classList.remove('aiss-loading');
       container.classList.add('aiss-loaded');
       container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">Request timed out. Please refresh the page to try again.</p>';
     }, timeoutMs);
 
-    fetch(endpoint, { credentials: 'same-origin' })
+    fetch(endpoint, { credentials: 'same-origin', signal: abortController.signal })
       .then(function(response) {
         clearTimeout(timeoutId);
 
@@ -197,6 +199,10 @@
       })
       .catch(function(error) {
         clearTimeout(timeoutId);
+        // Don't show error if request was intentionally aborted (timeout already handled)
+        if (error.name === 'AbortError') {
+          return;
+        }
         container.classList.remove('aiss-loading');
         container.classList.add('aiss-loaded');
         container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
