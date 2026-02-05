@@ -2835,10 +2835,10 @@ class AI_Search_Summary {
                     <div class="aiss-feedback-prompt" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
                         <span style="font-size:0.85rem;">Was this summary helpful?</span>
                         <div class="aiss-feedback-buttons" style="display:flex; gap:0.5rem;">
-                            <button type="button" class="aiss-feedback-btn" data-helpful="1" aria-label="Yes, helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; cursor:pointer; font-size:0.85rem;">
+                            <button type="button" class="aiss-feedback-btn" data-helpful="1" aria-label="Yes, helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer; font-size:0.85rem;">
                                 &#128077; Yes
                             </button>
-                            <button type="button" class="aiss-feedback-btn" data-helpful="0" aria-label="No, not helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; cursor:pointer; font-size:0.85rem;">
+                            <button type="button" class="aiss-feedback-btn" data-helpful="0" aria-label="No, not helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; color:inherit; cursor:pointer; font-size:0.85rem;">
                                 &#128078; No
                             </button>
                         </div>
