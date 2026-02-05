@@ -117,6 +117,11 @@ class AI_Search_Summary {
         return $wpdb->prefix . 'aiss_logs';
     }
 
+    private static function get_feedback_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'aiss_feedback';
+    }
+
     /**
      * Get the logs table name with backtick escaping for use in queries.
      * Note: Do not use with dbDelta() which requires unquoted table names.
@@ -125,6 +130,10 @@ class AI_Search_Summary {
      */
     private static function get_escaped_table_name() {
         return '`' . self::get_logs_table_name() . '`';
+    }
+
+    private static function get_escaped_feedback_table_name() {
+        return '`' . self::get_feedback_table_name() . '`';
     }
 
     private static function create_logs_table() {
@@ -147,6 +156,28 @@ class AI_Search_Summary {
             KEY search_query_created (search_query(100), created_at),
             KEY ai_success_created (ai_success, created_at),
             KEY cache_hit_created (cache_hit, created_at)
+        ) $charset_collate;";
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( $sql );
+    }
+
+    private static function create_feedback_table() {
+        global $wpdb;
+
+        $table_name      = self::get_feedback_table_name();
+        $charset_collate = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE $table_name (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            search_query varchar(255) NOT NULL,
+            helpful tinyint(1) NOT NULL,
+            ip_hash varchar(32) NOT NULL,
+            created_at datetime NOT NULL,
+            PRIMARY KEY  (id),
+            KEY search_query (search_query),
+            KEY helpful (helpful),
+            UNIQUE KEY unique_vote (search_query, ip_hash)
         ) $charset_collate;";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -252,6 +283,7 @@ class AI_Search_Summary {
 
     public static function activate() {
         self::create_logs_table();
+        self::create_feedback_table();
         self::add_missing_columns(); // Add columns to existing tables
         self::add_missing_indexes(); // Add indexes to existing tables
     }
@@ -276,6 +308,13 @@ class AI_Search_Summary {
             self::add_missing_columns();
             self::add_missing_indexes();
             update_option( 'aiss_db_version', '1.1' );
+            $db_version = '1.1';
+        }
+
+        // Version 1.2 adds feedback table
+        if ( version_compare( $db_version, '1.2', '<' ) ) {
+            self::create_feedback_table();
+            update_option( 'aiss_db_version', '1.2' );
         }
     }
 
@@ -371,6 +410,72 @@ class AI_Search_Summary {
                 ' | Query: ' . substr( $search_query, 0, 50 )
             );
         }
+    }
+
+    /**
+     * Record user feedback for a search query.
+     *
+     * @param string $search_query The search query.
+     * @param bool   $helpful      Whether the summary was helpful.
+     * @param string $ip           Client IP address.
+     * @return bool|string True on success, 'duplicate' if already voted, false on error.
+     */
+    private function record_feedback( $search_query, $helpful, $ip ) {
+        global $wpdb;
+
+        $table_name = self::get_feedback_table_name();
+        $ip_hash    = md5( $ip . wp_salt( 'auth' ) );
+
+        // Use INSERT IGNORE to handle the unique constraint gracefully
+        $result = $wpdb->query(
+            $wpdb->prepare(
+                "INSERT IGNORE INTO `{$table_name}` (search_query, helpful, ip_hash, created_at) VALUES (%s, %d, %s, %s)",
+                substr( $search_query, 0, 255 ),
+                $helpful ? 1 : 0,
+                $ip_hash,
+                current_time( 'mysql' )
+            )
+        );
+
+        if ( false === $result ) {
+            return false;
+        }
+
+        // rows_affected = 0 means duplicate (INSERT IGNORE skipped)
+        if ( 0 === $wpdb->rows_affected ) {
+            return 'duplicate';
+        }
+
+        return true;
+    }
+
+    /**
+     * Get feedback statistics for analytics.
+     *
+     * @return array Feedback stats.
+     */
+    private function get_feedback_stats() {
+        global $wpdb;
+
+        $table = self::get_escaped_feedback_table_name();
+
+        $stats = $wpdb->get_row(
+            "SELECT
+                COUNT(*) AS total_votes,
+                SUM(helpful) AS helpful_count,
+                COUNT(*) - SUM(helpful) AS not_helpful_count
+             FROM {$table}"
+        );
+
+        $total   = $stats ? (int) $stats->total_votes : 0;
+        $helpful = $stats ? (int) $stats->helpful_count : 0;
+
+        return array(
+            'total_votes'       => $total,
+            'helpful_count'     => $helpful,
+            'not_helpful_count' => $total - $helpful,
+            'helpful_rate'      => $total > 0 ? round( ( $helpful / $total ) * 100, 1 ) : 0,
+        );
     }
 
     /**
@@ -2053,6 +2158,9 @@ class AI_Search_Summary {
             "SELECT COUNT(*) FROM {$table_escaped} WHERE results_count = 0"
         );
 
+        // Get feedback stats
+        $feedback_stats = $this->get_feedback_stats();
+
         $since_24h = gmdate( 'Y-m-d H:i:s', time() - 24 * 60 * 60 );
         $last_24   = (int) $wpdb->get_var(
             $wpdb->prepare(
@@ -2146,6 +2254,20 @@ class AI_Search_Summary {
                         echo '&mdash;';
                     }
                 ?></div>
+            </div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">User Feedback</div>
+                <div class="aiss-stat-value"><?php
+                    if ( $feedback_stats['total_votes'] > 0 ) {
+                        echo esc_html( $feedback_stats['helpful_rate'] . '% helpful' );
+                    } else {
+                        echo '&mdash;';
+                    }
+                ?></div>
+            </div>
+            <div class="aiss-stat-card">
+                <div class="aiss-stat-label">Total Votes</div>
+                <div class="aiss-stat-value"><?php echo number_format( $feedback_stats['total_votes'] ); ?></div>
             </div>
         </div>
 
@@ -2627,10 +2749,11 @@ class AI_Search_Summary {
             'aiss',
             'AISSearch',
             array(
-                'endpoint'       => rest_url( 'aiss/v1/summary' ),
-                'query'          => get_search_query(),
-                'cacheVersion'   => $this->get_cache_namespace(),
-                'requestTimeout' => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : 60,
+                'endpoint'         => rest_url( 'aiss/v1/summary' ),
+                'feedbackEndpoint' => rest_url( 'aiss/v1/feedback' ),
+                'query'            => get_search_query(),
+                'cacheVersion'     => $this->get_cache_namespace(),
+                'requestTimeout'   => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : 60,
             )
         );
     }
@@ -2706,6 +2829,23 @@ class AI_Search_Summary {
                 <div id="aiss-search-summary-content" class="aiss-search-summary-content" aria-live="polite">
                     <span class="aiss-spinner" role="status" aria-label="Loading AI summary"></span>
                     <p class="aiss-loading-text">Generating summary based on your search and <?php echo esc_html( $site_name ); ?> articles...</p>
+                </div>
+
+                <div id="aiss-feedback" class="aiss-feedback" style="display:none; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid currentColor; opacity:0.3;">
+                    <div class="aiss-feedback-prompt" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem;">Was this summary helpful?</span>
+                        <div class="aiss-feedback-buttons" style="display:flex; gap:0.5rem;">
+                            <button type="button" class="aiss-feedback-btn" data-helpful="1" aria-label="Yes, helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; cursor:pointer; font-size:0.85rem; opacity:0.8;">
+                                <span aria-hidden="true">&#128077;</span> Yes
+                            </button>
+                            <button type="button" class="aiss-feedback-btn" data-helpful="0" aria-label="No, not helpful" style="padding:0.25rem 0.75rem; border:1px solid currentColor; border-radius:4px; background:transparent; cursor:pointer; font-size:0.85rem; opacity:0.8;">
+                                <span aria-hidden="true">&#128078;</span> No
+                            </button>
+                        </div>
+                    </div>
+                    <div class="aiss-feedback-thanks" style="display:none; font-size:0.85rem;">
+                        Thanks for your feedback!
+                    </div>
                 </div>
 
                 <div class="aiss-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
@@ -2935,6 +3075,63 @@ class AI_Search_Summary {
                 ),
             )
         );
+
+        // Feedback endpoint for thumbs up/down
+        register_rest_route(
+            'aiss/v1',
+            '/feedback',
+            array(
+                'methods'             => 'POST',
+                'callback'            => array( $this, 'rest_submit_feedback' ),
+                'permission_callback' => array( $this, 'rest_permission_check' ),
+                'args'                => array(
+                    'q' => array(
+                        'required'          => true,
+                        'sanitize_callback' => 'sanitize_text_field',
+                        'validate_callback' => array( $this, 'validate_search_query' ),
+                    ),
+                    'helpful' => array(
+                        'required'          => true,
+                        'validate_callback' => function( $value ) {
+                            return in_array( $value, array( 0, 1, '0', '1', true, false ), true );
+                        },
+                    ),
+                ),
+            )
+        );
+    }
+
+    /**
+     * Handle feedback submission from frontend.
+     *
+     * @param WP_REST_Request $request Request object.
+     * @return WP_REST_Response Response object.
+     */
+    public function rest_submit_feedback( $request ) {
+        $search_query = $request->get_param( 'q' );
+        $helpful      = (bool) $request->get_param( 'helpful' );
+        $ip           = $this->get_client_ip();
+
+        $result = $this->record_feedback( $search_query, $helpful, $ip );
+
+        if ( 'duplicate' === $result ) {
+            return rest_ensure_response( array(
+                'success' => false,
+                'message' => 'You have already submitted feedback for this search.',
+            ) );
+        }
+
+        if ( false === $result ) {
+            return rest_ensure_response( array(
+                'success' => false,
+                'message' => 'Failed to record feedback.',
+            ) );
+        }
+
+        return rest_ensure_response( array(
+            'success' => true,
+            'message' => 'Thank you for your feedback!',
+        ) );
     }
 
     /**

@@ -121,6 +121,7 @@
       container.classList.add('aiss-loaded');
       if (cached.answer_html) {
         container.innerHTML = cached.answer_html;
+        showFeedback();
       } else if (cached.error) {
         var errorP = document.createElement('p');
         errorP.setAttribute('role', 'alert');
@@ -178,6 +179,8 @@
           // Cache successful responses
           saveToCache(q, data);
           container.innerHTML = data.answer_html;
+          // Show feedback prompt
+          showFeedback();
           return;
         }
 
@@ -208,6 +211,7 @@
         container.innerHTML = '<p role="alert" style="margin:0; opacity:0.8;">AI summary is not available right now.</p>';
       });
 
+    // Sources toggle handler
     document.addEventListener('click', function(e) {
       var btn = e.target.closest('.aiss-sources-toggle');
       if (!btn) return;
@@ -232,5 +236,58 @@
         btn.setAttribute('aria-expanded', 'false');
       }
     });
+
+    // Feedback button handler
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.aiss-feedback-btn');
+      if (!btn) return;
+
+      var feedbackContainer = document.getElementById('aiss-feedback');
+      if (!feedbackContainer) return;
+
+      var helpful = btn.getAttribute('data-helpful') === '1';
+      var q = (window.AISSearch.query || '').trim();
+      var feedbackEndpoint = window.AISSearch.feedbackEndpoint;
+
+      if (!q || !feedbackEndpoint) return;
+
+      // Disable buttons immediately
+      var buttons = feedbackContainer.querySelectorAll('.aiss-feedback-btn');
+      buttons.forEach(function(b) { b.disabled = true; });
+
+      fetch(feedbackEndpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: q, helpful: helpful ? 1 : 0 })
+      })
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        var prompt = feedbackContainer.querySelector('.aiss-feedback-prompt');
+        var thanks = feedbackContainer.querySelector('.aiss-feedback-thanks');
+        if (prompt) prompt.style.display = 'none';
+        if (thanks) {
+          thanks.style.display = 'block';
+          if (data.message) thanks.textContent = data.message;
+        }
+      })
+      .catch(function() {
+        // Re-enable on error
+        buttons.forEach(function(b) { b.disabled = false; });
+      });
+    });
   });
+
+  /**
+   * Show the feedback prompt after a successful summary load.
+   */
+  function showFeedback() {
+    var feedback = document.getElementById('aiss-feedback');
+    if (feedback) {
+      feedback.style.display = 'block';
+    }
+  }
+
+  // Expose for use after fetch completes
+  window.aissShowFeedback = showFeedback;
 })();
