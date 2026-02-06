@@ -506,6 +506,7 @@ class AI_Search_Summary {
             'site_description'     => '',
             'show_openai_badge'    => 1,
             'show_sources'         => 1,
+            'show_feedback'        => 1,
             'color_background'     => '#121e2b',
             'color_text'           => '#e5e7eb',
             'color_accent'         => '#fba919',
@@ -590,6 +591,7 @@ class AI_Search_Summary {
 
         $output['show_openai_badge'] = isset($input['show_openai_badge']) && $input['show_openai_badge'] ? 1 : 0;
         $output['show_sources'] = isset($input['show_sources']) && $input['show_sources'] ? 1 : 0;
+        $output['show_feedback'] = isset($input['show_feedback']) && $input['show_feedback'] ? 1 : 0;
 
         // Color settings
         $output['color_background'] = isset($input['color_background']) ? $this->sanitize_color($input['color_background'], '#121e2b') : '#121e2b';
@@ -1648,6 +1650,28 @@ class AI_Search_Summary {
                                 </span>
                             </div>
                         </div>
+
+                        <!-- Show Feedback -->
+                        <div class="aiss-field">
+                            <div class="aiss-field-label">
+                                <label>Show Feedback Prompt</label>
+                            </div>
+                            <div class="aiss-field-description">
+                                Display "Was this helpful?" voting buttons after summaries
+                            </div>
+                            <div class="aiss-toggle-wrapper">
+                                <label class="aiss-toggle">
+                                    <input type="checkbox"
+                                           name="<?php echo esc_attr( $this->option_name ); ?>[show_feedback]"
+                                           value="1"
+                                           <?php checked( isset( $options['show_feedback'] ) ? $options['show_feedback'] : 1, 1 ); ?> />
+                                    <span class="aiss-toggle-slider"></span>
+                                </label>
+                                <span class="aiss-toggle-label">
+                                    <?php echo ( isset( $options['show_feedback'] ) && $options['show_feedback'] ) ? 'Visible' : 'Hidden'; ?>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2182,10 +2206,22 @@ class AI_Search_Summary {
              LIMIT 14"
         );
 
+        $feedback_table = self::get_escaped_feedback_table_name();
         $top_queries = $wpdb->get_results(
-            "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM {$table_escaped}
-             GROUP BY search_query
+            "SELECT l.search_query,
+                    COUNT(*) AS total,
+                    SUM(l.ai_success) AS success_count,
+                    f.vote_count,
+                    f.helpful_count
+             FROM {$table_escaped} l
+             LEFT JOIN (
+                 SELECT search_query,
+                        COUNT(*) AS vote_count,
+                        SUM(helpful) AS helpful_count
+                 FROM {$feedback_table}
+                 GROUP BY search_query
+             ) f ON l.search_query = f.search_query
+             GROUP BY l.search_query
              ORDER BY total DESC
              LIMIT 20"
         );
@@ -2341,8 +2377,9 @@ class AI_Search_Summary {
                             <thead>
                                 <tr>
                                     <th>Query</th>
-                                    <th>Total Searches</th>
-                                    <th>AI Success Rate</th>
+                                    <th>Searches</th>
+                                    <th>AI Success</th>
+                                    <th>Helpful</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2351,6 +2388,9 @@ class AI_Search_Summary {
                                     $total_q = (int) $row->total;
                                     $success_q = (int) $row->success_count;
                                     $success_q_rate = $this->calculate_success_rate( $success_q, $total_q );
+                                    $vote_count = isset( $row->vote_count ) ? (int) $row->vote_count : 0;
+                                    $helpful_count = isset( $row->helpful_count ) ? (int) $row->helpful_count : 0;
+                                    $helpful_rate = $vote_count > 0 ? round( ( $helpful_count / $vote_count ) * 100 ) : null;
                                     ?>
                                     <tr>
                                         <td class="aiss-query-cell"><?php echo esc_html( $row->search_query ); ?></td>
@@ -2359,6 +2399,16 @@ class AI_Search_Summary {
                                             <span class="aiss-badge aiss-badge-<?php echo $success_q_rate >= 90 ? 'success' : ( $success_q_rate >= 70 ? 'warning' : 'error' ); ?>">
                                                 <?php echo esc_html( $success_q_rate ); ?>%
                                             </span>
+                                        </td>
+                                        <td>
+                                            <?php if ( $helpful_rate !== null ) : ?>
+                                                <span class="aiss-badge aiss-badge-<?php echo $helpful_rate >= 70 ? 'success' : ( $helpful_rate >= 40 ? 'warning' : 'error' ); ?>">
+                                                    <?php echo esc_html( $helpful_rate ); ?>%
+                                                </span>
+                                                <span style="font-size:0.75rem; opacity:0.6;">(<?php echo $vote_count; ?>)</span>
+                                            <?php else : ?>
+                                                <span style="opacity:0.4;">&mdash;</span>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -2811,6 +2861,7 @@ class AI_Search_Summary {
         $search_query = get_search_query();
         $site_name = ! empty( $options['site_name'] ) ? $options['site_name'] : get_bloginfo( 'name' );
         $show_badge = isset( $options['show_openai_badge'] ) ? $options['show_openai_badge'] : 1;
+        $show_feedback = isset( $options['show_feedback'] ) ? $options['show_feedback'] : 1;
         ?>
         <div class="aiss-summary" style="margin-bottom: 1.5rem;">
             <div class="aiss-summary-inner" style="padding: 1.25rem 1.25rem; border-radius: 10px; border-width: 1px; border-style: solid; display:flex; flex-direction:column; gap:0.6rem;">
@@ -2831,6 +2882,7 @@ class AI_Search_Summary {
                     <p class="aiss-loading-text">Generating summary based on your search and <?php echo esc_html( $site_name ); ?> articles...</p>
                 </div>
 
+                <?php if ( $show_feedback ) : ?>
                 <div id="aiss-feedback" class="aiss-feedback" style="display:none; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid rgba(128,128,128,0.3);">
                     <div class="aiss-feedback-prompt" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
                         <span style="font-size:0.85rem;">Was this summary helpful?</span>
@@ -2847,6 +2899,7 @@ class AI_Search_Summary {
                         Thanks for your feedback!
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <div class="aiss-disclaimer" style="margin-top:0.75rem; font-size:0.75rem; line-height:1.4; opacity:0.65;">
                     AI summaries are generated automatically based on <?php echo esc_html( $site_name ); ?> articles and may be inaccurate or incomplete. Always verify important details.
