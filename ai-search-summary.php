@@ -2831,7 +2831,7 @@ class AI_Search_Summary {
                     </div>
 
                     <?php if ( $total_pages > 1 ) : ?>
-                        <div class="aiss-pagination" style="margin: 20px 20px 0 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                        <div class="aiss-pagination" style="margin: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                             <div class="aiss-pagination-info" style="font-size: 13px; color: #6e6e73;">
                                 Page <?php echo esc_html( $current_page ); ?> of <?php echo esc_html( $total_pages ); ?>
                                 <?php if ( $is_large_table ) : ?>
