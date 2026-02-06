@@ -2831,7 +2831,7 @@ class AI_Search_Summary {
                     </div>
 
                     <?php if ( $total_pages > 1 ) : ?>
-                        <div class="aiss-pagination" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <div class="aiss-pagination" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                             <div class="aiss-pagination-info" style="font-size: 13px; color: #6e6e73;">
                                 Page <?php echo esc_html( $current_page ); ?> of <?php echo esc_html( $total_pages ); ?>
                                 <?php if ( $is_large_table ) : ?>
@@ -2846,22 +2846,22 @@ class AI_Search_Summary {
 
                                 if ( $current_page > 1 ) : ?>
                                     <a href="<?php echo esc_url( add_query_arg( 'events_page', $current_page - 1, $base_url ) ); ?>"
-                                       class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                                       style="display: inline-block; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #374151; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; transition: all 0.15s ease;">
                                         &laquo; Previous
                                     </a>
                                 <?php else : ?>
-                                    <span class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px; opacity: 0.5; cursor: not-allowed;">
+                                    <span style="display: inline-block; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #9ca3af; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; cursor: not-allowed;">
                                         &laquo; Previous
                                     </span>
                                 <?php endif; ?>
 
                                 <?php if ( $current_page < $total_pages ) : ?>
                                     <a href="<?php echo esc_url( add_query_arg( 'events_page', $current_page + 1, $base_url ) ); ?>"
-                                       class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                                       style="display: inline-block; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #fff; background: #0071e3; border: 1px solid #0071e3; border-radius: 6px; text-decoration: none; transition: all 0.15s ease;">
                                         Next &raquo;
                                     </a>
                                 <?php else : ?>
-                                    <span class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px; opacity: 0.5; cursor: not-allowed;">
+                                    <span style="display: inline-block; padding: 8px 16px; font-size: 13px; font-weight: 500; color: #9ca3af; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; cursor: not-allowed;">
                                         Next &raquo;
                                     </span>
                                 <?php endif; ?>
