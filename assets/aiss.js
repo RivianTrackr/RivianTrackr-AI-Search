@@ -258,7 +258,10 @@
       fetch(feedbackEndpoint, {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': window.AISSearch.nonce || ''
+        },
         body: JSON.stringify({ q: q, helpful: helpful ? 1 : 0 })
       })
       .then(function(response) { return response.json(); })

@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: AI Search Summary
  * Plugin URI: https://github.com/RivianTrackr/AI-Search-Summary
  * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 4.1.0
+ * Version: 4.2.0
  * Author: Jose Castillo
  * Author URI: https://github.com/RivianTrackr/AI-Search-Summary
  * License: GPL v2 or later
  */
 
-define( 'AI_SEARCH_VERSION', '4.1.0' );
+define( 'AI_SEARCH_VERSION', '4.2.0' );
 define( 'AISS_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'AISS_MIN_CACHE_TTL', 60 );
 define( 'AISS_MAX_CACHE_TTL', 86400 );
@@ -399,11 +399,25 @@ class AI_Search_Summary {
 
         $now = current_time( 'mysql' );
 
+        // Sanitize error message to prevent XSS when displayed in admin
+        // Strip tags and limit length to prevent storage of malicious payloads
+        $sanitized_error = '';
+        if ( ! empty( $ai_error ) ) {
+            $sanitized_error = wp_strip_all_tags( $ai_error );
+            $sanitized_error = sanitize_text_field( $sanitized_error );
+            // Limit error message length to prevent oversized storage
+            if ( function_exists( 'mb_substr' ) ) {
+                $sanitized_error = mb_substr( $sanitized_error, 0, 500, 'UTF-8' );
+            } else {
+                $sanitized_error = substr( $sanitized_error, 0, 500 );
+            }
+        }
+
         $data = array(
             'search_query'  => $search_query,
             'results_count' => (int) $results_count,
             'ai_success'    => $ai_success ? 1 : 0,
-            'ai_error'      => $ai_error,
+            'ai_error'      => $sanitized_error,
             'created_at'    => $now,
         );
 
@@ -2358,9 +2372,42 @@ class AI_Search_Summary {
         <?php
     }
 
+    /**
+     * Get estimated row count for a table using INFORMATION_SCHEMA.
+     * Falls back to COUNT(*) for accuracy if estimate is unavailable.
+     *
+     * @param string $table_name Table name (without prefix).
+     * @return int Estimated row count.
+     */
+    private function get_estimated_row_count( $table_name ) {
+        global $wpdb;
+
+        // Try to get estimate from INFORMATION_SCHEMA (fast for InnoDB)
+        $estimate = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT TABLE_ROWS FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s",
+                $table_name
+            )
+        );
+
+        if ( $estimate !== null ) {
+            return (int) $estimate;
+        }
+
+        // Fallback to actual count (slower but accurate)
+        $table_escaped = '`' . esc_sql( $table_name ) . '`';
+        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table_escaped}" );
+    }
+
     private function render_analytics_content() {
         global $wpdb;
         $table_escaped = self::get_escaped_table_name();
+
+        // Get estimated row count to optimize queries for large datasets
+        $table_name     = self::get_logs_table_name();
+        $estimated_rows = $this->get_estimated_row_count( $table_name );
+        $is_large_table = $estimated_rows > 100000; // Consider >100k rows as large
 
         // Get cached overview stats (5-minute TTL)
         $cache_key = 'aiss_analytics_overview';
@@ -2456,12 +2503,32 @@ class AI_Search_Summary {
              LIMIT 10"
         );
 
+        // Pagination for recent events
+        $events_per_page = 50;
+        $current_page    = isset( $_GET['events_page'] ) ? max( 1, absint( $_GET['events_page'] ) ) : 1;
+        $events_offset   = ( $current_page - 1 ) * $events_per_page;
+
+        // For large tables, limit how far back users can paginate
+        $max_pages = $is_large_table ? 20 : 100;
+        if ( $current_page > $max_pages ) {
+            $current_page = $max_pages;
+            $events_offset = ( $current_page - 1 ) * $events_per_page;
+        }
+
         $recent_events = $wpdb->get_results(
-            "SELECT *
-             FROM {$table_escaped}
-             ORDER BY created_at DESC
-             LIMIT 50"
+            $wpdb->prepare(
+                "SELECT *
+                 FROM {$table_escaped}
+                 ORDER BY created_at DESC
+                 LIMIT %d OFFSET %d",
+                $events_per_page,
+                $events_offset
+            )
         );
+
+        // Calculate total pages (use cached total_searches for efficiency)
+        $total_events = $total_searches;
+        $total_pages  = min( $max_pages, (int) ceil( $total_events / $events_per_page ) );
         ?>
 
         <!-- Overview Stats Grid -->
@@ -2684,7 +2751,22 @@ class AI_Search_Summary {
         <div class="aiss-section">
             <div class="aiss-section-header">
                 <h2>Recent AI Search Events</h2>
-                <p>Latest 50 search requests</p>
+                <p>
+                    <?php
+                    $start_num = $events_offset + 1;
+                    $end_num   = min( $events_offset + $events_per_page, $total_events );
+                    if ( $total_events > 0 ) {
+                        printf(
+                            'Showing %s-%s of %s events',
+                            number_format( $start_num ),
+                            number_format( $end_num ),
+                            number_format( $total_events )
+                        );
+                    } else {
+                        echo 'No events recorded yet';
+                    }
+                    ?>
+                </p>
             </div>
             <div class="aiss-section-content">
                 <?php if ( ! empty( $recent_events ) ) : ?>
@@ -2747,6 +2829,46 @@ class AI_Search_Summary {
                             </tbody>
                         </table>
                     </div>
+
+                    <?php if ( $total_pages > 1 ) : ?>
+                        <div class="aiss-pagination" style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div class="aiss-pagination-info" style="font-size: 13px; color: #6e6e73;">
+                                Page <?php echo esc_html( $current_page ); ?> of <?php echo esc_html( $total_pages ); ?>
+                                <?php if ( $is_large_table ) : ?>
+                                    <span style="margin-left: 8px; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 11px;">
+                                        Large dataset - showing recent <?php echo esc_html( number_format( $max_pages * $events_per_page ) ); ?> events
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="aiss-pagination-buttons" style="display: flex; gap: 8px;">
+                                <?php
+                                $base_url = admin_url( 'admin.php?page=aiss-analytics' );
+
+                                if ( $current_page > 1 ) : ?>
+                                    <a href="<?php echo esc_url( add_query_arg( 'events_page', $current_page - 1, $base_url ) ); ?>"
+                                       class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                                        &laquo; Previous
+                                    </a>
+                                <?php else : ?>
+                                    <span class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px; opacity: 0.5; cursor: not-allowed;">
+                                        &laquo; Previous
+                                    </span>
+                                <?php endif; ?>
+
+                                <?php if ( $current_page < $total_pages ) : ?>
+                                    <a href="<?php echo esc_url( add_query_arg( 'events_page', $current_page + 1, $base_url ) ); ?>"
+                                       class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px;">
+                                        Next &raquo;
+                                    </a>
+                                <?php else : ?>
+                                    <span class="aiss-button aiss-button-secondary" style="padding: 6px 12px; font-size: 13px; opacity: 0.5; cursor: not-allowed;">
+                                        Next &raquo;
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                 <?php else : ?>
                     <div class="aiss-empty-message">No recent search events logged yet.</div>
                 <?php endif; ?>
@@ -3128,6 +3250,7 @@ class AI_Search_Summary {
             array(
                 'endpoint'         => rest_url( 'aiss/v1/summary' ),
                 'feedbackEndpoint' => rest_url( 'aiss/v1/feedback' ),
+                'nonce'            => wp_create_nonce( 'wp_rest' ),
                 'query'            => get_search_query(),
                 'cacheVersion'     => $this->get_cache_namespace(),
                 'requestTimeout'   => isset( $options['request_timeout'] ) ? (int) $options['request_timeout'] : 60,
@@ -3484,7 +3607,7 @@ class AI_Search_Summary {
             array(
                 'methods'             => 'POST',
                 'callback'            => array( $this, 'rest_submit_feedback' ),
-                'permission_callback' => array( $this, 'rest_permission_check' ),
+                'permission_callback' => array( $this, 'rest_feedback_permission_check' ),
                 'args'                => array(
                     'q' => array(
                         'required'          => true,
@@ -3616,6 +3739,35 @@ class AI_Search_Summary {
     }
 
     /**
+     * Permission check for feedback endpoint with CSRF protection.
+     *
+     * @param WP_REST_Request $request Request object.
+     * @return bool|WP_Error True if permitted, WP_Error otherwise.
+     */
+    public function rest_feedback_permission_check( WP_REST_Request $request ) {
+        // Verify nonce for CSRF protection
+        $nonce = $request->get_header( 'X-WP-Nonce' );
+        if ( empty( $nonce ) || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
+            return new WP_Error(
+                'rest_cookie_invalid_nonce',
+                'Invalid or missing security token. Please refresh the page and try again.',
+                array( 'status' => 403 )
+            );
+        }
+
+        // Block obvious bots
+        if ( $this->is_likely_bot() ) {
+            return new WP_Error(
+                AISS_ERROR_BOT_DETECTED,
+                'Feedback is not available for automated requests.',
+                array( 'status' => 403 )
+            );
+        }
+
+        return true;
+    }
+
+    /**
      * Validate search query parameter.
      *
      * @param mixed           $value   Query value.
@@ -3635,8 +3787,14 @@ class AI_Search_Summary {
         }
 
         // Reasonable length limits (prevent abuse)
-        $length = strlen( $value );
-        if ( $length < 2 || $length > 200 ) {
+        // Use mb_strlen for proper multi-byte character support
+        $length = function_exists( 'mb_strlen' ) ? mb_strlen( $value, 'UTF-8' ) : strlen( $value );
+        if ( $length < 2 || $length > 500 ) {
+            return false;
+        }
+
+        // Also check byte length to prevent oversized payloads
+        if ( strlen( $value ) > 2000 ) {
             return false;
         }
 
