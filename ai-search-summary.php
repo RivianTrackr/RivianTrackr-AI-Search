@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: AI Search Summary
  * Plugin URI: https://github.com/RivianTrackr/AI-Search-Summary
  * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 4.3.0
+ * Version: 4.2.0
  * Author: Jose Castillo
  * Author URI: https://github.com/RivianTrackr/AI-Search-Summary
  * License: GPL v2 or later
  */
 
-define( 'AI_SEARCH_VERSION', '4.3.0' );
+define( 'AI_SEARCH_VERSION', '4.2.0' );
 define( 'AISS_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'AISS_MIN_CACHE_TTL', 60 );
 define( 'AISS_MAX_CACHE_TTL', 86400 );
@@ -2980,65 +2980,6 @@ class AI_Search_Summary {
                         </div>
                     </form>
                 </div>
-                <div class="aiss-field" style="margin-top: 24px;">
-                    <div class="aiss-field-label">
-                        <label>Health Check Endpoint</label>
-                    </div>
-                    <div class="aiss-field-description">
-                        Use this endpoint for external monitoring tools (e.g., Uptime Robot, Pingdom).
-                        Returns plugin health status including API key validity, database status, and error rates.
-                    </div>
-                    <?php
-                    $health_token     = get_option( 'aiss_health_token', '' );
-                    $health_url       = rest_url( 'aiss/v1/health' );
-                    $token_regenerated = false;
-
-                    // Handle token generation/regeneration
-                    if (
-                        isset( $_POST['aiss_generate_health_token'] ) &&
-                        isset( $_POST['_wpnonce'] ) &&
-                        wp_verify_nonce( $_POST['_wpnonce'], 'aiss_health_token' )
-                    ) {
-                        $health_token = wp_generate_password( 32, false );
-                        update_option( 'aiss_health_token', $health_token );
-                        $token_regenerated = true;
-                    }
-                    ?>
-                    <?php if ( $token_regenerated ) : ?>
-                        <div class="aiss-notice aiss-notice-success" style="margin: 12px 0;">
-                            Health token has been regenerated. Update your monitoring tools with the new token.
-                        </div>
-                    <?php endif; ?>
-                    <div style="margin-top: 12px;">
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Endpoint URL</label>
-                            <input type="text" readonly value="<?php echo esc_attr( $health_url ); ?>"
-                                   style="width: 100%; max-width: 500px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; font-family: monospace; font-size: 13px;"
-                                   onclick="this.select();" />
-                        </div>
-                        <?php if ( ! empty( $health_token ) ) : ?>
-                            <div style="margin-bottom: 12px;">
-                                <label style="display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px;">Auth Token (X-AISS-Health-Token header)</label>
-                                <input type="text" readonly value="<?php echo esc_attr( $health_token ); ?>"
-                                       style="width: 100%; max-width: 500px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; font-family: monospace; font-size: 13px;"
-                                       onclick="this.select();" />
-                            </div>
-                            <p style="font-size: 12px; color: #6e6e73; margin-bottom: 12px;">
-                                <strong>Example:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">curl -H "X-AISS-Health-Token: <?php echo esc_html( substr( $health_token, 0, 8 ) ); ?>..." <?php echo esc_html( $health_url ); ?></code>
-                            </p>
-                        <?php else : ?>
-                            <p style="font-size: 13px; color: #6e6e73; margin-bottom: 12px;">
-                                Generate a token to allow external monitoring tools to access the health endpoint without WordPress admin authentication.
-                            </p>
-                        <?php endif; ?>
-                        <form method="post" style="display: inline;">
-                            <?php wp_nonce_field( 'aiss_health_token' ); ?>
-                            <button type="submit" name="aiss_generate_health_token" value="1" class="aiss-button aiss-button-secondary">
-                                <?php echo empty( $health_token ) ? 'Generate Token' : 'Regenerate Token'; ?>
-                            </button>
-                        </form>
-                    </div>
-                </div>
             </div>
         </div>
         <?php
@@ -3682,17 +3623,6 @@ class AI_Search_Summary {
                 ),
             )
         );
-
-        // Health check endpoint for monitoring
-        register_rest_route(
-            'aiss/v1',
-            '/health',
-            array(
-                'methods'             => 'GET',
-                'callback'            => array( $this, 'rest_health_check' ),
-                'permission_callback' => array( $this, 'rest_health_check_permission' ),
-            )
-        );
     }
 
     /**
@@ -3748,166 +3678,6 @@ class AI_Search_Summary {
         $this->log_search_event( $search_query, $results_count, 1, '', 2 );
 
         return rest_ensure_response( array( 'logged' => true ) );
-    }
-
-    /**
-     * Permission check for health endpoint.
-     * Requires admin capability or valid auth token.
-     *
-     * @param WP_REST_Request $request Request object.
-     * @return bool|WP_Error True if permitted, WP_Error otherwise.
-     */
-    public function rest_health_check_permission( WP_REST_Request $request ) {
-        // Allow admins
-        if ( current_user_can( 'manage_options' ) ) {
-            return true;
-        }
-
-        // Allow requests with valid auth token (for external monitoring)
-        $auth_token = $request->get_header( 'X-AISS-Health-Token' );
-        if ( ! empty( $auth_token ) ) {
-            $stored_token = get_option( 'aiss_health_token' );
-            if ( ! empty( $stored_token ) && hash_equals( $stored_token, $auth_token ) ) {
-                return true;
-            }
-        }
-
-        return new WP_Error(
-            'rest_forbidden',
-            'Health check requires admin access or valid auth token.',
-            array( 'status' => 403 )
-        );
-    }
-
-    /**
-     * Health check endpoint for monitoring.
-     *
-     * Returns status of plugin components:
-     * - Plugin enabled/disabled
-     * - API key configured and valid
-     * - Database tables available
-     * - Recent error rate
-     * - Cache status
-     *
-     * @param WP_REST_Request $request Request object.
-     * @return WP_REST_Response Health status response.
-     */
-    public function rest_health_check( WP_REST_Request $request ) {
-        $checks  = array();
-        $status  = 'healthy';
-        $options = $this->get_options();
-
-        // Check 1: Plugin enabled
-        $plugin_enabled = ! empty( $options['enable'] );
-        $checks['plugin_enabled'] = array(
-            'status'  => $plugin_enabled ? 'pass' : 'warn',
-            'message' => $plugin_enabled ? 'Plugin is enabled' : 'Plugin is disabled',
-        );
-        if ( ! $plugin_enabled && $status === 'healthy' ) {
-            $status = 'degraded';
-        }
-
-        // Check 2: API key configured
-        $api_key_set = ! empty( $options['api_key'] ) || $this->is_api_key_from_constant();
-        $api_key_valid = isset( $options['api_key_valid'] ) ? $options['api_key_valid'] : null;
-
-        if ( ! $api_key_set ) {
-            $checks['api_key'] = array(
-                'status'  => 'fail',
-                'message' => 'API key not configured',
-            );
-            $status = 'unhealthy';
-        } elseif ( $api_key_valid === false ) {
-            $checks['api_key'] = array(
-                'status'  => 'fail',
-                'message' => 'API key is invalid',
-            );
-            $status = 'unhealthy';
-        } else {
-            $checks['api_key'] = array(
-                'status'  => 'pass',
-                'message' => 'API key configured' . ( $api_key_valid ? ' and validated' : '' ),
-            );
-        }
-
-        // Check 3: Database tables
-        $logs_table_ok = $this->logs_table_is_available();
-        $checks['database'] = array(
-            'status'  => $logs_table_ok ? 'pass' : 'fail',
-            'message' => $logs_table_ok ? 'Database tables available' : 'Database tables missing',
-        );
-        if ( ! $logs_table_ok ) {
-            $status = 'unhealthy';
-        }
-
-        // Check 4: Recent error rate (last 24 hours)
-        if ( $logs_table_ok ) {
-            global $wpdb;
-            $table_escaped = self::get_escaped_table_name();
-            $since_24h     = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
-
-            $stats = $wpdb->get_row(
-                $wpdb->prepare(
-                    "SELECT
-                        COUNT(*) AS total,
-                        SUM(CASE WHEN ai_success = 0 AND ai_error IS NOT NULL AND ai_error <> '' THEN 1 ELSE 0 END) AS errors
-                     FROM {$table_escaped}
-                     WHERE created_at >= %s",
-                    $since_24h
-                )
-            );
-
-            $total_24h  = $stats ? (int) $stats->total : 0;
-            $errors_24h = $stats ? (int) $stats->errors : 0;
-            $error_rate = $total_24h > 0 ? round( ( $errors_24h / $total_24h ) * 100, 1 ) : 0;
-
-            $error_status = 'pass';
-            if ( $error_rate > 50 ) {
-                $error_status = 'fail';
-                $status       = 'unhealthy';
-            } elseif ( $error_rate > 20 ) {
-                $error_status = 'warn';
-                if ( $status === 'healthy' ) {
-                    $status = 'degraded';
-                }
-            }
-
-            $checks['error_rate'] = array(
-                'status'     => $error_status,
-                'message'    => sprintf( '%s%% error rate in last 24h (%d errors / %d requests)', $error_rate, $errors_24h, $total_24h ),
-                'error_rate' => $error_rate,
-                'errors'     => $errors_24h,
-                'total'      => $total_24h,
-            );
-        }
-
-        // Check 5: Model configured
-        $model_set = ! empty( $options['model'] );
-        $checks['model'] = array(
-            'status'  => $model_set ? 'pass' : 'warn',
-            'message' => $model_set ? 'Model configured: ' . $options['model'] : 'No model selected',
-        );
-        if ( ! $model_set && $status === 'healthy' ) {
-            $status = 'degraded';
-        }
-
-        // Build response
-        $response = array(
-            'status'    => $status,
-            'timestamp' => gmdate( 'c' ),
-            'version'   => AI_SEARCH_VERSION,
-            'checks'    => $checks,
-        );
-
-        // Set appropriate HTTP status code
-        $http_status = 200;
-        if ( $status === 'unhealthy' ) {
-            $http_status = 503;
-        } elseif ( $status === 'degraded' ) {
-            $http_status = 200; // Still return 200 for degraded
-        }
-
-        return new WP_REST_Response( $response, $http_status );
     }
 
     /**
