@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: AI Search Summary
  * Plugin URI: https://github.com/RivianTrackr/AI-Search-Summary
  * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 4.0.3
+ * Version: 4.1.0
  * Author: Jose Castillo
  * Author URI: https://github.com/RivianTrackr/AI-Search-Summary
  * License: GPL v2 or later
  */
 
-define( 'AI_SEARCH_VERSION', '4.0.3' );
+define( 'AI_SEARCH_VERSION', '4.1.0' );
 define( 'AISS_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'AISS_MIN_CACHE_TTL', 60 );
 define( 'AISS_MAX_CACHE_TTL', 86400 );
@@ -68,6 +68,8 @@ class AI_Search_Summary {
         add_action( 'wp_ajax_aiss_test_api_key', array( $this, 'ajax_test_api_key' ) );
         add_action( 'wp_ajax_aiss_refresh_models', array( $this, 'ajax_refresh_models' ) );
         add_action( 'wp_ajax_aiss_clear_cache', array( $this, 'ajax_clear_cache' ) );
+        add_action( 'admin_post_aiss_export_csv', array( $this, 'handle_csv_export' ) );
+        add_action( 'aiss_daily_log_purge', array( $this, 'run_scheduled_purge' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
 
@@ -155,7 +157,8 @@ class AI_Search_Summary {
             KEY created_at (created_at),
             KEY search_query_created (search_query(100), created_at),
             KEY ai_success_created (ai_success, created_at),
-            KEY cache_hit_created (cache_hit, created_at)
+            KEY cache_hit_created (cache_hit, created_at),
+            KEY results_count (results_count)
         ) $charset_collate;";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -235,6 +238,17 @@ class AI_Search_Summary {
             }
         }
 
+        // Add results_count index if missing (for no-results queries)
+        if ( ! in_array( 'results_count', $index_names, true ) ) {
+            $wpdb->query(
+                "ALTER TABLE {$table_escaped}
+                 ADD INDEX results_count (results_count)"
+            );
+            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                error_log( '[AI Search Summary] Added results_count index' );
+            }
+        }
+
         return true;
     }
 
@@ -286,6 +300,16 @@ class AI_Search_Summary {
         self::create_feedback_table();
         self::add_missing_columns(); // Add columns to existing tables
         self::add_missing_indexes(); // Add indexes to existing tables
+    }
+
+    /**
+     * Clean up scheduled events on plugin deactivation.
+     */
+    public static function deactivate() {
+        $timestamp = wp_next_scheduled( 'aiss_daily_log_purge' );
+        if ( $timestamp ) {
+            wp_unschedule_event( $timestamp, 'aiss_daily_log_purge' );
+        }
     }
 
     private function ensure_logs_table() {
@@ -602,6 +626,27 @@ class AI_Search_Summary {
         $output['custom_css'] = isset($input['custom_css']) ? $this->sanitize_custom_css($input['custom_css']) : '';
         $output['allow_reasoning_models'] = isset($input['allow_reasoning_models']) && $input['allow_reasoning_models'] ? 1 : 0;
 
+        // Auto-purge settings
+        $output['auto_purge_enabled'] = isset($input['auto_purge_enabled']) && $input['auto_purge_enabled'] ? 1 : 0;
+        $output['auto_purge_days'] = isset($input['auto_purge_days'])
+            ? max(7, min(365, intval($input['auto_purge_days'])))
+            : 90;
+
+        // Schedule or unschedule cron based on auto-purge setting
+        $old_purge_enabled = isset( $old_options['auto_purge_enabled'] ) ? $old_options['auto_purge_enabled'] : 0;
+        if ( $output['auto_purge_enabled'] && ! $old_purge_enabled ) {
+            // Enable: schedule daily purge if not already scheduled
+            if ( ! wp_next_scheduled( 'aiss_daily_log_purge' ) ) {
+                wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'aiss_daily_log_purge' );
+            }
+        } elseif ( ! $output['auto_purge_enabled'] && $old_purge_enabled ) {
+            // Disable: unschedule the cron
+            $timestamp = wp_next_scheduled( 'aiss_daily_log_purge' );
+            if ( $timestamp ) {
+                wp_unschedule_event( $timestamp, 'aiss_daily_log_purge' );
+            }
+        }
+
         // Auto-clear cache when model, token limit, or display settings change
         $old_model       = isset( $old_options['model'] ) ? $old_options['model'] : '';
         $old_show_sources = isset( $old_options['show_sources'] ) ? $old_options['show_sources'] : 1;
@@ -873,6 +918,8 @@ class AI_Search_Summary {
                     'site_name'            => '',
                     'site_description'     => '',
                     'custom_css'           => '',
+                    'auto_purge_enabled'   => 0,
+                    'auto_purge_days'      => 90,
                 )
             )
         );
@@ -1029,6 +1076,166 @@ class AI_Search_Summary {
             wp_send_json_success( array( 'message' => 'AI summary cache cleared. New searches will fetch fresh answers.' ) );
         } else {
             wp_send_json_error( array( 'message' => 'Could not clear cache.' ) );
+        }
+    }
+
+    /**
+     * Handle CSV export request.
+     */
+    public function handle_csv_export() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Permission denied.', 'Error', array( 'response' => 403 ) );
+        }
+
+        if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( $_POST['_wpnonce'], 'aiss_export_csv' ) ) {
+            wp_die( 'Invalid security token.', 'Error', array( 'response' => 403 ) );
+        }
+
+        global $wpdb;
+
+        $export_type = isset( $_POST['export_type'] ) ? sanitize_key( $_POST['export_type'] ) : 'logs';
+        $from_date   = isset( $_POST['export_from'] ) ? sanitize_text_field( $_POST['export_from'] ) : gmdate( 'Y-m-d', strtotime( '-30 days' ) );
+        $to_date     = isset( $_POST['export_to'] ) ? sanitize_text_field( $_POST['export_to'] ) : gmdate( 'Y-m-d' );
+
+        // Validate dates
+        if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from_date ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $to_date ) ) {
+            wp_die( 'Invalid date format.', 'Error', array( 'response' => 400 ) );
+        }
+
+        // Add time to dates for inclusive range
+        $from_datetime = $from_date . ' 00:00:00';
+        $to_datetime   = $to_date . ' 23:59:59';
+
+        $filename = 'aiss-' . $export_type . '-' . $from_date . '-to-' . $to_date . '.csv';
+        $rows     = array();
+        $headers  = array();
+
+        $logs_table     = self::get_escaped_table_name();
+        $feedback_table = self::get_escaped_feedback_table_name();
+
+        switch ( $export_type ) {
+            case 'feedback':
+                $headers = array( 'ID', 'Search Query', 'Helpful', 'Date' );
+                $results = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT id, search_query, helpful, created_at
+                         FROM {$feedback_table}
+                         WHERE created_at BETWEEN %s AND %s
+                         ORDER BY created_at DESC",
+                        $from_datetime,
+                        $to_datetime
+                    )
+                );
+                foreach ( $results as $row ) {
+                    $rows[] = array(
+                        $row->id,
+                        $row->search_query,
+                        $row->helpful ? 'Yes' : 'No',
+                        $row->created_at,
+                    );
+                }
+                break;
+
+            case 'daily':
+                $headers = array( 'Date', 'Total Searches', 'Successful', 'Cache Hits', 'Cache Misses', 'Success Rate', 'Cache Hit Rate' );
+                $results = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT
+                            DATE(created_at) AS day,
+                            COUNT(*) AS total,
+                            SUM(ai_success) AS success_count,
+                            SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
+                            SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses
+                         FROM {$logs_table}
+                         WHERE created_at BETWEEN %s AND %s
+                         GROUP BY DATE(created_at)
+                         ORDER BY day DESC",
+                        $from_datetime,
+                        $to_datetime
+                    )
+                );
+                foreach ( $results as $row ) {
+                    $total       = (int) $row->total;
+                    $success     = (int) $row->success_count;
+                    $hits        = (int) $row->cache_hits;
+                    $misses      = (int) $row->cache_misses;
+                    $cache_total = $hits + $misses;
+
+                    $rows[] = array(
+                        $row->day,
+                        $total,
+                        $success,
+                        $hits,
+                        $misses,
+                        $total > 0 ? round( ( $success / $total ) * 100, 1 ) . '%' : '0%',
+                        $cache_total > 0 ? round( ( $hits / $cache_total ) * 100, 1 ) . '%' : 'N/A',
+                    );
+                }
+                break;
+
+            default: // logs
+                $headers = array( 'ID', 'Search Query', 'Results Count', 'AI Success', 'Cache Hit', 'Response Time (ms)', 'Error', 'Date' );
+                $results = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT id, search_query, results_count, ai_success, cache_hit, response_time_ms, ai_error, created_at
+                         FROM {$logs_table}
+                         WHERE created_at BETWEEN %s AND %s
+                         ORDER BY created_at DESC",
+                        $from_datetime,
+                        $to_datetime
+                    )
+                );
+                foreach ( $results as $row ) {
+                    $cache_label = $row->cache_hit === null ? '' : ( $row->cache_hit ? 'Yes' : 'No' );
+                    $rows[] = array(
+                        $row->id,
+                        $row->search_query,
+                        $row->results_count,
+                        $row->ai_success ? 'Yes' : 'No',
+                        $cache_label,
+                        $row->response_time_ms ?? '',
+                        $row->ai_error ?? '',
+                        $row->created_at,
+                    );
+                }
+                break;
+        }
+
+        // Output CSV
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+        header( 'Pragma: no-cache' );
+        header( 'Expires: 0' );
+
+        $output = fopen( 'php://output', 'w' );
+
+        // Add BOM for Excel UTF-8 compatibility
+        fprintf( $output, chr( 0xEF ) . chr( 0xBB ) . chr( 0xBF ) );
+
+        fputcsv( $output, $headers );
+        foreach ( $rows as $row ) {
+            fputcsv( $output, $row );
+        }
+
+        fclose( $output );
+        exit;
+    }
+
+    /**
+     * Run the scheduled log purge via WP-Cron.
+     */
+    public function run_scheduled_purge() {
+        $options = $this->get_options();
+
+        if ( empty( $options['auto_purge_enabled'] ) ) {
+            return;
+        }
+
+        $days = isset( $options['auto_purge_days'] ) ? absint( $options['auto_purge_days'] ) : 90;
+        $deleted = $this->purge_old_logs( $days );
+
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG && $deleted !== false ) {
+            error_log( '[AI Search Summary] Auto-purge: deleted ' . $deleted . ' log entries older than ' . $days . ' days.' );
         }
     }
 
@@ -2155,18 +2362,36 @@ class AI_Search_Summary {
         global $wpdb;
         $table_escaped = self::get_escaped_table_name();
 
-        // Get overview stats
-        // cache_hit values: 0 = miss, 1 = server cache hit, 2 = session/browser cache hit
-        $totals = $wpdb->get_row(
-            "SELECT
-                COUNT(*) AS total,
-                SUM(ai_success) AS success_count,
-                SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count,
-                SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
-                SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses,
-                AVG(response_time_ms) AS avg_response_time
-             FROM {$table_escaped}"
-        );
+        // Get cached overview stats (5-minute TTL)
+        $cache_key = 'aiss_analytics_overview';
+        $cached_stats = get_transient( $cache_key );
+
+        if ( false === $cached_stats ) {
+            // cache_hit values: 0 = miss, 1 = server cache hit, 2 = session/browser cache hit
+            $totals = $wpdb->get_row(
+                "SELECT
+                    COUNT(*) AS total,
+                    SUM(ai_success) AS success_count,
+                    SUM(CASE WHEN ai_success = 0 AND (ai_error IS NOT NULL AND ai_error <> '') THEN 1 ELSE 0 END) AS error_count,
+                    SUM(CASE WHEN cache_hit IN (1, 2) THEN 1 ELSE 0 END) AS cache_hits,
+                    SUM(CASE WHEN cache_hit = 0 THEN 1 ELSE 0 END) AS cache_misses,
+                    AVG(response_time_ms) AS avg_response_time
+                 FROM {$table_escaped}"
+            );
+
+            $no_results_count = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM {$table_escaped} WHERE results_count = 0"
+            );
+
+            $cached_stats = array(
+                'totals'           => $totals,
+                'no_results_count' => $no_results_count,
+            );
+            set_transient( $cache_key, $cached_stats, 5 * MINUTE_IN_SECONDS );
+        }
+
+        $totals           = $cached_stats['totals'];
+        $no_results_count = $cached_stats['no_results_count'];
 
         $total_searches      = $totals ? (int) $totals->total : 0;
         $success_count       = $totals ? (int) $totals->success_count : 0;
@@ -2177,10 +2402,6 @@ class AI_Search_Summary {
         $cache_total         = $cache_hits + $cache_misses;
         $cache_hit_rate      = $cache_total > 0 ? round( ( $cache_hits / $cache_total ) * 100, 1 ) : 0;
         $success_rate        = $this->calculate_success_rate( $success_count, $total_searches );
-
-        $no_results_count = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM {$table_escaped} WHERE results_count = 0"
-        );
 
         // Get feedback stats
         $feedback_stats = $this->get_feedback_stats();
@@ -2559,6 +2780,84 @@ class AI_Search_Summary {
                         </button>
                     </form>
                 </div>
+                <div class="aiss-field" style="margin-top: 24px;">
+                    <div class="aiss-field-label">
+                        <label>Automatic Purging</label>
+                    </div>
+                    <div class="aiss-field-description">
+                        Automatically delete old logs on a daily schedule to keep your database clean.
+                    </div>
+                    <?php
+                    $options          = $this->get_options();
+                    $auto_purge       = ! empty( $options['auto_purge_enabled'] );
+                    $auto_purge_days  = isset( $options['auto_purge_days'] ) ? absint( $options['auto_purge_days'] ) : 90;
+                    $next_scheduled   = wp_next_scheduled( 'aiss_daily_log_purge' );
+                    ?>
+                    <form method="post" action="options.php" style="margin-top: 12px;">
+                        <?php settings_fields( 'aiss_group' ); ?>
+                        <?php
+                        // Preserve all existing options as hidden fields
+                        foreach ( $options as $key => $value ) {
+                            if ( $key !== 'auto_purge_enabled' && $key !== 'auto_purge_days' ) {
+                                if ( is_array( $value ) ) {
+                                    continue;
+                                }
+                                echo '<input type="hidden" name="' . esc_attr( $this->option_name ) . '[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" />';
+                            }
+                        }
+                        ?>
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <input type="checkbox" name="<?php echo esc_attr( $this->option_name ); ?>[auto_purge_enabled]" value="1" <?php checked( $auto_purge ); ?> />
+                                <span>Enable automatic purging</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <span>Keep logs for</span>
+                                <input type="number" name="<?php echo esc_attr( $this->option_name ); ?>[auto_purge_days]" value="<?php echo esc_attr( $auto_purge_days ); ?>" min="7" max="365" style="width: 80px;" />
+                                <span>days</span>
+                            </label>
+                            <button type="submit" class="aiss-button aiss-button-secondary">Save</button>
+                        </div>
+                        <?php if ( $auto_purge && $next_scheduled ) : ?>
+                            <p style="margin-top: 8px; font-size: 12px; color: #6e6e73;">
+                                Next scheduled purge: <?php echo esc_html( date_i18n( 'M j, Y g:i a', $next_scheduled ) ); ?>
+                            </p>
+                        <?php endif; ?>
+                    </form>
+                </div>
+                <div class="aiss-field" style="margin-top: 24px;">
+                    <div class="aiss-field-label">
+                        <label>Export Data</label>
+                    </div>
+                    <div class="aiss-field-description">
+                        Download analytics data as CSV for external analysis. Choose date range and data type.
+                    </div>
+                    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top: 12px;">
+                        <?php wp_nonce_field( 'aiss_export_csv' ); ?>
+                        <input type="hidden" name="action" value="aiss_export_csv" />
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <span>From:</span>
+                                <input type="date" name="export_from" value="<?php echo esc_attr( gmdate( 'Y-m-d', strtotime( '-30 days' ) ) ); ?>" />
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <span>To:</span>
+                                <input type="date" name="export_to" value="<?php echo esc_attr( gmdate( 'Y-m-d' ) ); ?>" />
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px;">
+                                <span>Data:</span>
+                                <select name="export_type">
+                                    <option value="logs">Search Logs</option>
+                                    <option value="feedback">User Feedback</option>
+                                    <option value="daily">Daily Summary</option>
+                                </select>
+                            </label>
+                            <button type="submit" class="aiss-button aiss-button-secondary">
+                                Export CSV
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
         <?php
@@ -2622,31 +2921,59 @@ class AI_Search_Summary {
         global $wpdb;
         $table_escaped = self::get_escaped_table_name();
 
-        $totals = $wpdb->get_row(
-            "SELECT COUNT(*) AS total, SUM(ai_success) AS success_count, AVG(response_time_ms) AS avg_response_time
-             FROM {$table_escaped}"
-        );
+        // Dashboard widget uses cached stats with 5-minute TTL
+        $cache_key = 'aiss_dashboard_widget_stats';
+        $cached = get_transient( $cache_key );
+
+        if ( false === $cached ) {
+            // Limit dashboard queries to last 30 days for performance
+            $since_30d = gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS );
+            $since_24h = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
+
+            $totals = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) AS total, SUM(ai_success) AS success_count, AVG(response_time_ms) AS avg_response_time
+                     FROM {$table_escaped}
+                     WHERE created_at >= %s",
+                    $since_30d
+                )
+            );
+
+            $last_24 = (int) $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table_escaped} WHERE created_at >= %s",
+                    $since_24h
+                )
+            );
+
+            $top_queries = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
+                     FROM {$table_escaped}
+                     WHERE created_at >= %s
+                     GROUP BY search_query
+                     ORDER BY total DESC
+                     LIMIT 5",
+                    $since_30d
+                )
+            );
+
+            $cached = array(
+                'totals'      => $totals,
+                'last_24'     => $last_24,
+                'top_queries' => $top_queries,
+            );
+            set_transient( $cache_key, $cached, 5 * MINUTE_IN_SECONDS );
+        }
+
+        $totals      = $cached['totals'];
+        $last_24     = $cached['last_24'];
+        $top_queries = $cached['top_queries'];
 
         $total_searches     = $totals ? (int) $totals->total : 0;
         $success_count      = $totals ? (int) $totals->success_count : 0;
         $success_rate       = $this->calculate_success_rate( $success_count, $total_searches );
         $widget_avg_rt      = $totals && $totals->avg_response_time !== null ? (int) round( (float) $totals->avg_response_time ) : null;
-
-        $since_24h = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
-        $last_24   = (int) $wpdb->get_var(
-            $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$table_escaped} WHERE created_at >= %s",
-                $since_24h
-            )
-        );
-
-        $top_queries = $wpdb->get_results(
-            "SELECT search_query, COUNT(*) AS total, SUM(ai_success) AS success_count
-             FROM {$table_escaped}
-             GROUP BY search_query
-             ORDER BY total DESC
-             LIMIT 5"
-        );
         ?>
         
         <div class="aiss-widget-container">
@@ -3004,7 +3331,8 @@ class AI_Search_Summary {
     /**
      * Check if an IP is rate limited and track the request.
      *
-     * Uses a sliding window algorithm to prevent burst abuse at window boundaries.
+     * Uses a single transient per IP with timestamp tracking for efficiency.
+     * This avoids transient bloat from multiple window-based keys per IP.
      *
      * @param string $ip Client IP address.
      * @return bool True if rate limited.
@@ -3016,11 +3344,24 @@ class AI_Search_Summary {
             return true;
         }
 
-        // Increment the current window counter
-        $window      = (int) floor( time() / 60 );
-        $current_key = 'aiss_ip_rate_' . md5( $ip ) . '_' . $window;
-        $current     = (int) get_transient( $current_key );
-        set_transient( $current_key, $current + 1, AISS_RATE_LIMIT_WINDOW );
+        // Add current timestamp to the list
+        $ip_hash    = md5( $ip );
+        $key        = 'aiss_ip_rate_' . $ip_hash;
+        $timestamps = get_transient( $key );
+
+        if ( ! is_array( $timestamps ) ) {
+            $timestamps = array();
+        }
+
+        // Add current timestamp and prune old ones (older than 60 seconds)
+        $now         = time();
+        $cutoff      = $now - 60;
+        $timestamps  = array_values( array_filter( $timestamps, function ( $ts ) use ( $cutoff ) {
+            return $ts > $cutoff;
+        } ) );
+        $timestamps[] = $now;
+
+        set_transient( $key, $timestamps, AISS_RATE_LIMIT_WINDOW );
 
         return false;
     }
@@ -3028,36 +3369,43 @@ class AI_Search_Summary {
     /**
      * Get rate limit information for an IP.
      *
-     * Uses sliding window: weights previous window by elapsed time to prevent
-     * burst abuse at minute boundaries (e.g., 10 requests at :59 + 10 at :00).
+     * Uses timestamp-based sliding window for accurate rate limiting without
+     * creating multiple transients per IP.
      *
      * @param string $ip Client IP address.
      * @return array Rate limit info with 'limit', 'remaining', 'used', and 'reset' keys.
      */
     private function get_rate_limit_info( $ip ) {
         $limit   = AISS_IP_RATE_LIMIT;
-        $window  = (int) floor( time() / 60 );
         $ip_hash = md5( $ip );
+        $key     = 'aiss_ip_rate_' . $ip_hash;
 
-        $current_key = 'aiss_ip_rate_' . $ip_hash . '_' . $window;
-        $prev_key    = 'aiss_ip_rate_' . $ip_hash . '_' . ( $window - 1 );
+        $timestamps = get_transient( $key );
+        if ( ! is_array( $timestamps ) ) {
+            $timestamps = array();
+        }
 
-        $current_count = (int) get_transient( $current_key );
-        $prev_count    = (int) get_transient( $prev_key );
+        // Filter to timestamps within the last 60 seconds
+        $now    = time();
+        $cutoff = $now - 60;
+        $recent = array_filter( $timestamps, function ( $ts ) use ( $cutoff ) {
+            return $ts > $cutoff;
+        } );
 
-        // Sliding window: weight previous window inversely by elapsed seconds
-        $elapsed_seconds = time() % 60;
-        $prev_weight     = ( 60 - $elapsed_seconds ) / 60;
-        $weighted_used   = $current_count + ( $prev_count * $prev_weight );
+        $used = count( $recent );
 
-        // Round up to be conservative (deny borderline cases)
-        $effective_used = (int) ceil( $weighted_used );
+        // Calculate reset time based on oldest timestamp in window
+        $reset = $now + 60;
+        if ( ! empty( $recent ) ) {
+            $oldest = min( $recent );
+            $reset  = $oldest + 60;
+        }
 
         return array(
             'limit'     => $limit,
-            'remaining' => max( 0, $limit - $effective_used ),
-            'used'      => $effective_used,
-            'reset'     => time() + ( 60 - $elapsed_seconds ),
+            'remaining' => max( 0, $limit - $used ),
+            'used'      => $used,
+            'reset'     => $reset,
         );
     }
 
@@ -3970,5 +4318,6 @@ class AI_Search_Summary {
 }
 
 register_activation_hook( __FILE__, array( 'AI_Search_Summary', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'AI_Search_Summary', 'deactivate' ) );
 
 new AI_Search_Summary();
