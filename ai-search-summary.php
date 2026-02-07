@@ -4597,13 +4597,14 @@ class AI_Search_Summary {
      */
     public function render_trending_shortcode( $atts ) {
         $atts = shortcode_atts( array(
-            'limit'    => 5,
-            'title'    => '',
-            'subtitle' => '',
-            'color'    => '',
+            'limit'      => 5,
+            'title'      => '',
+            'subtitle'   => '',
+            'color'      => '',
+            'font_color' => '',
         ), $atts, 'aiss_trending' );
 
-        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'], $atts['color'] );
+        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'], $atts['color'], $atts['font_color'] );
     }
 
     /**
@@ -4646,15 +4647,21 @@ class AI_Search_Summary {
      * @param string $title Optional title.
      * @param string $subtitle Optional subtitle/description.
      * @param string $bg_color Optional background color (hex).
+     * @param string $font_color Optional font color (hex).
      * @return string HTML output.
      */
-    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '', $bg_color = '' ) {
+    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '', $bg_color = '', $font_color = '' ) {
         $keywords = $this->get_trending_keywords( $limit );
         $options  = $this->get_options();
 
         // Use provided background color, fall back to accent color from settings
         if ( empty( $bg_color ) ) {
             $bg_color = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
+        }
+
+        // Default font color
+        if ( empty( $font_color ) ) {
+            $font_color = '#1a1a1a';
         }
 
         if ( empty( $keywords ) ) {
@@ -4671,7 +4678,7 @@ class AI_Search_Summary {
 
         $html = '<div class="aiss-trending-widget" style="
             background: ' . esc_attr( $bg_color ) . ';
-            color: #1a1a1a;
+            color: ' . esc_attr( $font_color ) . ';
             border-radius: 20px;
             padding: 24px;
             font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -4697,8 +4704,8 @@ class AI_Search_Summary {
         $html .= '<h3 class="aiss-trending-title" style="
             margin: 0 0 4px 0;
             font-size: 20px;
-            font-weight: 700;
-            color: #1a1a1a;
+            font-weight: 800;
+            color: ' . esc_attr( $font_color ) . ';
             line-height: 1.2;
         ">' . esc_html( $title ) . '</h3>';
 
@@ -4706,7 +4713,8 @@ class AI_Search_Summary {
             $html .= '<p class="aiss-trending-subtitle" style="
                 margin: 0;
                 font-size: 14px;
-                color: #1a1a1a;
+                font-weight: 400;
+                color: ' . esc_attr( $font_color ) . ';
                 opacity: 0.8;
                 line-height: 1.4;
             ">' . esc_html( $subtitle ) . '</p>';
@@ -4731,7 +4739,7 @@ class AI_Search_Summary {
             $html .= '<a href="' . esc_url( $search_url ) . '" class="aiss-trending-link" style="
                 display: block;
                 text-decoration: none;
-                color: #1a1a1a;
+                color: ' . esc_attr( $font_color ) . ';
                 padding: 10px 14px;
                 background: rgba(0, 0, 0, 0.08);
                 border-radius: 12px;
@@ -4813,10 +4821,11 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Saved values from database.
      */
     public function widget( $args, $instance ) {
-        $title    = ! empty( $instance['title'] ) ? $instance['title'] : '';
-        $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
-        $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
-        $bg_color = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '';
+        $title      = ! empty( $instance['title'] ) ? $instance['title'] : '';
+        $subtitle   = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
+        $limit      = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color   = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '';
+        $font_color = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '';
 
         // Get the main plugin instance
         global $aiss_instance;
@@ -4824,7 +4833,7 @@ class AISS_Trending_Widget extends WP_Widget {
             $aiss_instance = new AI_Search_Summary();
         }
 
-        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle, $bg_color );
+        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle, $bg_color, $font_color );
 
         if ( empty( $content ) ) {
             return; // Don't show widget if no trending searches
@@ -4841,10 +4850,11 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Previously saved values from database.
      */
     public function form( $instance ) {
-        $title    = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
-        $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
-        $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
-        $bg_color = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '#fba919';
+        $title      = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
+        $subtitle   = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
+        $limit      = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color   = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '#fba919';
+        $font_color = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '#1a1a1a';
         ?>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">Title:</label>
@@ -4890,8 +4900,26 @@ class AISS_Trending_Widget extends WP_Widget {
             });
             </script>
         </p>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'font_color' ) ); ?>">Font Color:</label><br>
+            <input id="<?php echo esc_attr( $this->get_field_id( 'font_color' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'font_color' ) ); ?>"
+                   type="color"
+                   value="<?php echo esc_attr( $font_color ); ?>"
+                   style="width: 50px; height: 30px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
+            <input type="text"
+                   id="<?php echo esc_attr( $this->get_field_id( 'font_color_text' ) ); ?>"
+                   value="<?php echo esc_attr( $font_color ); ?>"
+                   style="width: 80px; margin-left: 8px;"
+                   onchange="document.getElementById('<?php echo esc_attr( $this->get_field_id( 'font_color' ) ); ?>').value = this.value;">
+            <script>
+            document.getElementById('<?php echo esc_attr( $this->get_field_id( 'font_color' ) ); ?>').addEventListener('input', function() {
+                document.getElementById('<?php echo esc_attr( $this->get_field_id( 'font_color_text' ) ); ?>').value = this.value;
+            });
+            </script>
+        </p>
         <p class="description">
-            Shortcode: <code>[aiss_trending limit="5" color="#fba919"]</code>
+            Shortcode: <code>[aiss_trending limit="5" color="#fba919" font_color="#1a1a1a"]</code>
         </p>
         <?php
     }
@@ -4904,11 +4932,12 @@ class AISS_Trending_Widget extends WP_Widget {
      * @return array Updated safe values to be saved.
      */
     public function update( $new_instance, $old_instance ) {
-        $instance             = array();
-        $instance['title']    = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
-        $instance['subtitle'] = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
-        $instance['limit']    = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
-        $instance['bg_color'] = ! empty( $new_instance['bg_color'] ) ? sanitize_hex_color( $new_instance['bg_color'] ) : '#fba919';
+        $instance               = array();
+        $instance['title']      = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
+        $instance['subtitle']   = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
+        $instance['limit']      = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
+        $instance['bg_color']   = ! empty( $new_instance['bg_color'] ) ? sanitize_hex_color( $new_instance['bg_color'] ) : '#fba919';
+        $instance['font_color'] = ! empty( $new_instance['font_color'] ) ? sanitize_hex_color( $new_instance['font_color'] ) : '#1a1a1a';
 
         return $instance;
     }
