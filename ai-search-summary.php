@@ -4590,37 +4590,47 @@ class AI_Search_Summary {
     /**
      * Render the trending searches shortcode.
      *
-     * Usage: [aiss_trending limit="5" title="Trending Searches"]
+     * Usage: [aiss_trending limit="5" title="Trending Searches" time_period="24" time_unit="hours"]
      *
      * @param array $atts Shortcode attributes.
      * @return string HTML output.
      */
     public function render_trending_shortcode( $atts ) {
         $atts = shortcode_atts( array(
-            'limit'      => 5,
-            'title'      => '',
-            'subtitle'   => '',
-            'color'      => '',
-            'font_color' => '',
+            'limit'       => 5,
+            'title'       => '',
+            'subtitle'    => '',
+            'color'       => '',
+            'font_color'  => '',
+            'time_period' => 24,
+            'time_unit'   => 'hours',
         ), $atts, 'aiss_trending' );
 
-        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'], $atts['color'], $atts['font_color'] );
+        // Validate time_unit
+        $time_unit = in_array( $atts['time_unit'], array( 'hours', 'days' ), true ) ? $atts['time_unit'] : 'hours';
+
+        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'], $atts['color'], $atts['font_color'], (int) $atts['time_period'], $time_unit );
     }
 
     /**
-     * Get trending search keywords from the last 24 hours.
+     * Get trending search keywords from a configurable time period.
      *
      * @param int $limit Number of keywords to return.
+     * @param int $time_period Time period value (default 24).
+     * @param string $time_unit Time unit: 'hours' or 'days' (default 'hours').
      * @return array Array of trending keywords with counts.
      */
-    public function get_trending_keywords( $limit = 5 ) {
+    public function get_trending_keywords( $limit = 5, $time_period = 24, $time_unit = 'hours' ) {
         if ( ! $this->logs_table_is_available() ) {
             return array();
         }
 
         global $wpdb;
         $table_escaped = self::get_escaped_table_name();
-        $since_24h     = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
+
+        // Calculate seconds based on time unit
+        $seconds = ( 'days' === $time_unit ) ? $time_period * DAY_IN_SECONDS : $time_period * HOUR_IN_SECONDS;
+        $since   = gmdate( 'Y-m-d H:i:s', time() - $seconds );
 
         $results = $wpdb->get_results(
             $wpdb->prepare(
@@ -4632,7 +4642,7 @@ class AI_Search_Summary {
                  GROUP BY search_query
                  ORDER BY search_count DESC
                  LIMIT %d",
-                $since_24h,
+                $since,
                 $limit
             )
         );
@@ -4648,10 +4658,12 @@ class AI_Search_Summary {
      * @param string $subtitle Optional subtitle/description.
      * @param string $bg_color Optional background color (hex).
      * @param string $font_color Optional font color (hex).
+     * @param int    $time_period Time period value (default 24).
+     * @param string $time_unit Time unit: 'hours' or 'days' (default 'hours').
      * @return string HTML output.
      */
-    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '', $bg_color = '', $font_color = '' ) {
-        $keywords = $this->get_trending_keywords( $limit );
+    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '', $bg_color = '', $font_color = '', $time_period = 24, $time_unit = 'hours' ) {
+        $keywords = $this->get_trending_keywords( $limit, $time_period, $time_unit );
         $options  = $this->get_options();
 
         // Use provided background color, fall back to accent color from settings
@@ -4853,7 +4865,7 @@ class AISS_Trending_Widget extends WP_Widget {
             'aiss_trending_widget',
             'AI Search - Trending Searches',
             array(
-                'description' => 'Display trending search keywords from the last 24 hours.',
+                'description' => 'Display trending search keywords from a configurable time period.',
                 'classname'   => 'aiss-trending-widget-container',
             )
         );
@@ -4866,11 +4878,13 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Saved values from database.
      */
     public function widget( $args, $instance ) {
-        $title      = ! empty( $instance['title'] ) ? $instance['title'] : '';
-        $subtitle   = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
-        $limit      = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
-        $bg_color   = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '';
-        $font_color = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '';
+        $title       = ! empty( $instance['title'] ) ? $instance['title'] : '';
+        $subtitle    = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
+        $limit       = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color    = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '';
+        $font_color  = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '';
+        $time_period = ! empty( $instance['time_period'] ) ? (int) $instance['time_period'] : 24;
+        $time_unit   = ! empty( $instance['time_unit'] ) ? $instance['time_unit'] : 'hours';
 
         // Get the main plugin instance
         global $aiss_instance;
@@ -4878,7 +4892,7 @@ class AISS_Trending_Widget extends WP_Widget {
             $aiss_instance = new AI_Search_Summary();
         }
 
-        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle, $bg_color, $font_color );
+        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle, $bg_color, $font_color, $time_period, $time_unit );
 
         if ( empty( $content ) ) {
             return; // Don't show widget if no trending searches
@@ -4895,11 +4909,13 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Previously saved values from database.
      */
     public function form( $instance ) {
-        $title      = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
-        $subtitle   = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
-        $limit      = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
-        $bg_color   = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '#fba919';
-        $font_color = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '#1a1a1a';
+        $title       = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
+        $subtitle    = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
+        $limit       = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color    = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '#fba919';
+        $font_color  = ! empty( $instance['font_color'] ) ? $instance['font_color'] : '#1a1a1a';
+        $time_period = ! empty( $instance['time_period'] ) ? (int) $instance['time_period'] : 24;
+        $time_unit   = ! empty( $instance['time_unit'] ) ? $instance['time_unit'] : 'hours';
         ?>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">Title:</label>
@@ -4926,6 +4942,23 @@ class AISS_Trending_Widget extends WP_Widget {
                    min="1"
                    max="20"
                    value="<?php echo esc_attr( $limit ); ?>">
+        </p>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'time_period' ) ); ?>">Time period:</label>
+            <input class="tiny-text"
+                   id="<?php echo esc_attr( $this->get_field_id( 'time_period' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'time_period' ) ); ?>"
+                   type="number"
+                   min="1"
+                   max="365"
+                   value="<?php echo esc_attr( $time_period ); ?>"
+                   style="width: 60px;">
+            <select id="<?php echo esc_attr( $this->get_field_id( 'time_unit' ) ); ?>"
+                    name="<?php echo esc_attr( $this->get_field_name( 'time_unit' ) ); ?>">
+                <option value="hours" <?php selected( $time_unit, 'hours' ); ?>>Hours</option>
+                <option value="days" <?php selected( $time_unit, 'days' ); ?>>Days</option>
+            </select>
+            <br><small class="description">Show searches from the last X hours or days</small>
         </p>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'bg_color' ) ); ?>">Background Color:</label><br>
@@ -4964,7 +4997,7 @@ class AISS_Trending_Widget extends WP_Widget {
             </script>
         </p>
         <p class="description">
-            Shortcode: <code>[aiss_trending limit="5" color="#fba919" font_color="#1a1a1a"]</code>
+            Shortcode: <code>[aiss_trending limit="5" time_period="24" time_unit="hours"]</code>
         </p>
         <?php
     }
@@ -4977,12 +5010,14 @@ class AISS_Trending_Widget extends WP_Widget {
      * @return array Updated safe values to be saved.
      */
     public function update( $new_instance, $old_instance ) {
-        $instance               = array();
-        $instance['title']      = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
-        $instance['subtitle']   = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
-        $instance['limit']      = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
-        $instance['bg_color']   = ! empty( $new_instance['bg_color'] ) ? sanitize_hex_color( $new_instance['bg_color'] ) : '#fba919';
-        $instance['font_color'] = ! empty( $new_instance['font_color'] ) ? sanitize_hex_color( $new_instance['font_color'] ) : '#1a1a1a';
+        $instance                = array();
+        $instance['title']       = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
+        $instance['subtitle']    = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
+        $instance['limit']       = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
+        $instance['bg_color']    = ! empty( $new_instance['bg_color'] ) ? sanitize_hex_color( $new_instance['bg_color'] ) : '#fba919';
+        $instance['font_color']  = ! empty( $new_instance['font_color'] ) ? sanitize_hex_color( $new_instance['font_color'] ) : '#1a1a1a';
+        $instance['time_period'] = ! empty( $new_instance['time_period'] ) ? min( 365, max( 1, (int) $new_instance['time_period'] ) ) : 24;
+        $instance['time_unit']   = ! empty( $new_instance['time_unit'] ) && in_array( $new_instance['time_unit'], array( 'hours', 'days' ), true ) ? $new_instance['time_unit'] : 'hours';
 
         return $instance;
     }
