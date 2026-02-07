@@ -4673,8 +4673,9 @@ class AI_Search_Summary {
             $title = 'Trending Searches';
         }
 
-        // SVG search/trending icon
-        $icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 32px; height: 32px;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+        // Font Awesome icon (primary) and SVG fallback
+        $icon_fa = '<i class="fa-solid fa-magnifying-glass aiss-trending-fa-icon" style="font-size: 32px; display: none;"></i>';
+        $icon_svg = '<svg class="aiss-trending-svg-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 32px; height: 32px;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
 
         $html = '<div class="aiss-trending-widget" style="
             background: ' . esc_attr( $bg_color ) . ';
@@ -4693,11 +4694,11 @@ class AI_Search_Summary {
             margin-bottom: 20px;
         ">';
 
-        // Icon
+        // Icon (Font Awesome with SVG fallback)
         $html .= '<div class="aiss-trending-icon" style="
             flex-shrink: 0;
             opacity: 0.9;
-        ">' . $icon_svg . '</div>';
+        ">' . $icon_fa . $icon_svg . '</div>';
 
         // Title and subtitle
         $html .= '<div class="aiss-trending-header-text">';
@@ -4754,7 +4755,7 @@ class AI_Search_Summary {
 
         $html .= '</ul></div>';
 
-        // Add responsive styles
+        // Add responsive styles and Font Awesome detection
         $html .= '<style>
             .aiss-trending-widget {
                 max-width: 100%;
@@ -4775,6 +4776,9 @@ class AI_Search_Summary {
                     width: 28px !important;
                     height: 28px !important;
                 }
+                .aiss-trending-icon .aiss-trending-fa-icon {
+                    font-size: 28px !important;
+                }
                 .aiss-trending-title {
                     font-size: 18px !important;
                 }
@@ -4789,7 +4793,43 @@ class AI_Search_Summary {
                     font-size: 14px !important;
                 }
             }
-        </style>';
+        </style>
+        <script>
+        (function() {
+            function checkFontAwesome() {
+                var faIcons = document.querySelectorAll(".aiss-trending-fa-icon");
+                var svgIcons = document.querySelectorAll(".aiss-trending-svg-icon");
+                var hasFontAwesome = false;
+
+                // Check if Font Awesome is loaded by testing computed styles
+                var testIcon = document.createElement("i");
+                testIcon.className = "fa-solid fa-magnifying-glass";
+                testIcon.style.position = "absolute";
+                testIcon.style.left = "-9999px";
+                document.body.appendChild(testIcon);
+
+                var computedFont = window.getComputedStyle(testIcon).fontFamily;
+                if (computedFont.toLowerCase().indexOf("font awesome") !== -1 ||
+                    computedFont.toLowerCase().indexOf("fontawesome") !== -1) {
+                    hasFontAwesome = true;
+                }
+                document.body.removeChild(testIcon);
+
+                if (hasFontAwesome) {
+                    faIcons.forEach(function(icon) { icon.style.display = "inline-block"; });
+                    svgIcons.forEach(function(icon) { icon.style.display = "none"; });
+                }
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", checkFontAwesome);
+            } else {
+                checkFontAwesome();
+            }
+            // Also check after a short delay for async-loaded Font Awesome
+            setTimeout(checkFontAwesome, 500);
+        })();
+        </script>';
 
         return $html;
     }
