@@ -4597,11 +4597,12 @@ class AI_Search_Summary {
      */
     public function render_trending_shortcode( $atts ) {
         $atts = shortcode_atts( array(
-            'limit' => 5,
-            'title' => '',
+            'limit'    => 5,
+            'title'    => '',
+            'subtitle' => '',
         ), $atts, 'aiss_trending' );
 
-        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'] );
+        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'] );
     }
 
     /**
@@ -4642,82 +4643,123 @@ class AI_Search_Summary {
      *
      * @param int    $limit Number of keywords to show.
      * @param string $title Optional title.
+     * @param string $subtitle Optional subtitle/description.
      * @return string HTML output.
      */
-    public function render_trending_searches( $limit = 5, $title = '' ) {
+    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '' ) {
         $keywords = $this->get_trending_keywords( $limit );
         $options  = $this->get_options();
 
-        // Get colors from settings
-        $bg_color     = isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b';
-        $text_color   = isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb';
+        // Get accent color from settings for background
         $accent_color = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
-        $border_color = isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8';
 
         if ( empty( $keywords ) ) {
             return '';
         }
 
-        $html = '<div class="aiss-trending-widget" style="
-            background: ' . esc_attr( $bg_color ) . ';
-            color: ' . esc_attr( $text_color ) . ';
-            border: 1px solid ' . esc_attr( $border_color ) . ';
-            border-radius: 12px;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, sans-serif;
-        ">';
-
-        if ( ! empty( $title ) ) {
-            $html .= '<h3 class="aiss-trending-title" style="
-                margin: 0 0 16px 0;
-                font-size: 16px;
-                font-weight: 600;
-                color: ' . esc_attr( $text_color ) . ';
-            ">' . esc_html( $title ) . '</h3>';
+        // Default title if not provided
+        if ( empty( $title ) ) {
+            $title = 'Trending Searches';
         }
 
+        // SVG search/trending icon
+        $icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 32px; height: 32px;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+
+        $html = '<div class="aiss-trending-widget" style="
+            background: ' . esc_attr( $accent_color ) . ';
+            color: #1a1a1a;
+            border-radius: 20px;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, sans-serif;
+            box-sizing: border-box;
+        ">';
+
+        // Header with icon
+        $html .= '<div class="aiss-trending-header" style="
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+        ">';
+
+        // Icon
+        $html .= '<div class="aiss-trending-icon" style="
+            flex-shrink: 0;
+            opacity: 0.9;
+        ">' . $icon_svg . '</div>';
+
+        // Title and subtitle
+        $html .= '<div class="aiss-trending-header-text">';
+        $html .= '<h3 class="aiss-trending-title" style="
+            margin: 0 0 4px 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.2;
+        ">' . esc_html( $title ) . '</h3>';
+
+        if ( ! empty( $subtitle ) ) {
+            $html .= '<p class="aiss-trending-subtitle" style="
+                margin: 0;
+                font-size: 14px;
+                color: #1a1a1a;
+                opacity: 0.8;
+                line-height: 1.4;
+            ">' . esc_html( $subtitle ) . '</p>';
+        }
+
+        $html .= '</div></div>';
+
+        // Keywords list
         $html .= '<ul class="aiss-trending-list" style="
             list-style: none;
             margin: 0;
             padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         ">';
 
-        $total = count( $keywords );
         foreach ( $keywords as $index => $keyword ) {
             $search_url = home_url( '/?s=' . urlencode( $keyword->search_query ) );
-            $is_first   = $index === 0;
-            $is_last    = $index === $total - 1;
+            $rank = $index + 1;
 
-            $html .= '<li class="aiss-trending-item" style="
-                ' . ( ! $is_last ? 'margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid ' . esc_attr( $border_color ) . '33;' : '' ) . '
-            ">';
-
+            $html .= '<li class="aiss-trending-item">';
             $html .= '<a href="' . esc_url( $search_url ) . '" class="aiss-trending-link" style="
                 display: flex;
                 align-items: center;
-                justify-content: space-between;
-                text-decoration: none;
-                color: inherit;
                 gap: 12px;
+                text-decoration: none;
+                color: #1a1a1a;
+                padding: 10px 14px;
+                background: rgba(0, 0, 0, 0.08);
+                border-radius: 12px;
+                transition: background 0.15s ease;
             ">';
 
+            // Rank number
+            $html .= '<span class="aiss-trending-rank" style="
+                font-size: 14px;
+                font-weight: 700;
+                opacity: 0.6;
+                min-width: 20px;
+            ">' . esc_html( $rank ) . '</span>';
+
+            // Query text
             $html .= '<span class="aiss-trending-query" style="
                 flex: 1;
-                font-size: 14px;
+                font-size: 15px;
+                font-weight: 500;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                ' . ( $is_first ? 'font-weight: 600; color: ' . esc_attr( $accent_color ) . ';' : '' ) . '
             ">' . esc_html( $keyword->search_query ) . '</span>';
 
+            // Search count
             $html .= '<span class="aiss-trending-count" style="
-                background: ' . esc_attr( $accent_color ) . '22;
-                color: ' . esc_attr( $accent_color ) . ';
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 600;
-                padding: 4px 8px;
-                border-radius: 12px;
-                white-space: nowrap;
+                opacity: 0.7;
             ">' . esc_html( $keyword->search_count ) . '</span>';
 
             $html .= '</a></li>';
@@ -4729,30 +4771,35 @@ class AI_Search_Summary {
         $html .= '<style>
             .aiss-trending-widget {
                 max-width: 100%;
-                box-sizing: border-box;
             }
-            .aiss-trending-link:hover .aiss-trending-query {
-                text-decoration: underline;
+            .aiss-trending-link:hover {
+                background: rgba(0, 0, 0, 0.15) !important;
             }
             @media (max-width: 480px) {
                 .aiss-trending-widget {
-                    padding: 16px !important;
-                    border-radius: 8px !important;
+                    padding: 20px !important;
+                    border-radius: 16px !important;
+                }
+                .aiss-trending-header {
+                    gap: 12px !important;
+                    margin-bottom: 16px !important;
+                }
+                .aiss-trending-icon svg {
+                    width: 28px !important;
+                    height: 28px !important;
                 }
                 .aiss-trending-title {
-                    font-size: 14px !important;
-                    margin-bottom: 12px !important;
+                    font-size: 18px !important;
                 }
-                .aiss-trending-item {
-                    margin-bottom: 10px !important;
-                    padding-bottom: 10px !important;
-                }
-                .aiss-trending-query {
+                .aiss-trending-subtitle {
                     font-size: 13px !important;
                 }
-                .aiss-trending-count {
-                    font-size: 11px !important;
-                    padding: 3px 6px !important;
+                .aiss-trending-link {
+                    padding: 8px 12px !important;
+                    gap: 10px !important;
+                }
+                .aiss-trending-query {
+                    font-size: 14px !important;
                 }
             }
         </style>';
@@ -4787,8 +4834,9 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Saved values from database.
      */
     public function widget( $args, $instance ) {
-        $title = ! empty( $instance['title'] ) ? $instance['title'] : '';
-        $limit = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $title    = ! empty( $instance['title'] ) ? $instance['title'] : '';
+        $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
+        $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
 
         // Get the main plugin instance
         global $aiss_instance;
@@ -4796,7 +4844,7 @@ class AISS_Trending_Widget extends WP_Widget {
             $aiss_instance = new AI_Search_Summary();
         }
 
-        $content = $aiss_instance->render_trending_searches( $limit, $title );
+        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle );
 
         if ( empty( $content ) ) {
             return; // Don't show widget if no trending searches
@@ -4813,8 +4861,9 @@ class AISS_Trending_Widget extends WP_Widget {
      * @param array $instance Previously saved values from database.
      */
     public function form( $instance ) {
-        $title = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
-        $limit = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $title    = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
+        $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
+        $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
         ?>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">Title:</label>
@@ -4823,6 +4872,14 @@ class AISS_Trending_Widget extends WP_Widget {
                    name="<?php echo esc_attr( $this->get_field_name( 'title' ) ); ?>"
                    type="text"
                    value="<?php echo esc_attr( $title ); ?>">
+        </p>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'subtitle' ) ); ?>">Subtitle:</label>
+            <input class="widefat"
+                   id="<?php echo esc_attr( $this->get_field_id( 'subtitle' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'subtitle' ) ); ?>"
+                   type="text"
+                   value="<?php echo esc_attr( $subtitle ); ?>">
         </p>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'limit' ) ); ?>">Number of searches to show:</label>
@@ -4835,8 +4892,8 @@ class AISS_Trending_Widget extends WP_Widget {
                    value="<?php echo esc_attr( $limit ); ?>">
         </p>
         <p class="description">
-            Uses colors from AI Search Summary settings.<br>
-            Shortcode: <code>[aiss_trending limit="5" title="Trending"]</code>
+            Uses accent color from AI Search Summary settings.<br>
+            Shortcode: <code>[aiss_trending limit="5" title="Trending" subtitle="Popular searches"]</code>
         </p>
         <?php
     }
@@ -4849,9 +4906,10 @@ class AISS_Trending_Widget extends WP_Widget {
      * @return array Updated safe values to be saved.
      */
     public function update( $new_instance, $old_instance ) {
-        $instance          = array();
-        $instance['title'] = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
-        $instance['limit'] = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
+        $instance             = array();
+        $instance['title']    = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
+        $instance['subtitle'] = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
+        $instance['limit']    = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
 
         return $instance;
     }
