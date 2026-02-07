@@ -3798,7 +3798,107 @@ class AI_Search_Summary {
             return false;
         }
 
+        // Block SQL injection attempts
+        if ( $this->is_sql_injection_attempt( $value ) ) {
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * Detect SQL injection patterns in input.
+     *
+     * @param string $value Input value to check.
+     * @return bool True if SQL injection pattern detected.
+     */
+    private function is_sql_injection_attempt( $value ) {
+        // Normalize: lowercase and decode URL encoding
+        $normalized = strtolower( urldecode( $value ) );
+
+        // Remove SQL comment obfuscation (/**/)
+        $normalized = preg_replace( '/\/\*.*?\*\//', ' ', $normalized );
+
+        // Normalize whitespace (including encoded whitespace chars)
+        $normalized = preg_replace( '/[\s\x00-\x1f]+/', ' ', $normalized );
+
+        // SQL injection patterns to block
+        $sql_patterns = array(
+            // SQL keywords with operators
+            'select.*from',
+            'union.*select',
+            'insert.*into',
+            'delete.*from',
+            'update.*set',
+            'drop.*table',
+            'create.*table',
+            'alter.*table',
+            'exec.*\(',
+            'execute.*\(',
+
+            // SQL functions commonly used in injection
+            'concat\s*\(',
+            'char\s*\(',
+            'chr\s*\(',
+            'substring\s*\(',
+            'ascii\s*\(',
+            'hex\s*\(',
+            'unhex\s*\(',
+            'load_file\s*\(',
+            'outfile',
+            'dumpfile',
+            'benchmark\s*\(',
+            'sleep\s*\(',
+            'waitfor.*delay',
+
+            // Oracle-specific (common in automated scanners)
+            'ctxsys\.',
+            'drithsx',
+            'from\s+dual',
+            'dbms_',
+            'utl_',
+
+            // SQL Server specific
+            'xp_cmdshell',
+            'sp_executesql',
+            'information_schema',
+            'sysobjects',
+            'syscolumns',
+
+            // Boolean-based injection patterns
+            '\band\b.*=.*\bcase\b',
+            '\bor\b.*=.*\bcase\b',
+            'when.*then.*else.*end',
+
+            // Comment-based injection
+            '--\s*$',
+            '#\s*$',
+
+            // Stacked queries
+            ';\s*select',
+            ';\s*insert',
+            ';\s*update',
+            ';\s*delete',
+            ';\s*drop',
+        );
+
+        foreach ( $sql_patterns as $pattern ) {
+            if ( preg_match( '/' . $pattern . '/i', $normalized ) ) {
+                // Log the attempt for security monitoring
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                    error_log( '[AI Search Summary] Blocked SQL injection attempt: ' . substr( $value, 0, 100 ) );
+                }
+                return true;
+            }
+        }
+
+        // Check for excessive special characters (sign of injection attempts)
+        $special_char_count = preg_match_all( '/[\'"\(\)\|\=\;\%]/', $value );
+        if ( $special_char_count > 10 ) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
