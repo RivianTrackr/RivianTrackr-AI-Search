@@ -4,13 +4,13 @@ declare(strict_types=1);
  * Plugin Name: AI Search Summary
  * Plugin URI: https://github.com/RivianTrackr/AI-Search-Summary
  * Description: Add an OpenAI powered AI summary to WordPress search results without delaying normal results, with analytics, cache control, and collapsible sources.
- * Version: 4.2.0
+ * Version: 4.3.0
  * Author: Jose Castillo
  * Author URI: https://github.com/RivianTrackr/AI-Search-Summary
  * License: GPL v2 or later
  */
 
-define( 'AI_SEARCH_VERSION', '4.2.0' );
+define( 'AI_SEARCH_VERSION', '4.3.0' );
 define( 'AISS_MODELS_CACHE_TTL', 7 * DAY_IN_SECONDS );
 define( 'AISS_MIN_CACHE_TTL', 60 );
 define( 'AISS_MAX_CACHE_TTL', 86400 );
@@ -72,6 +72,8 @@ class AI_Search_Summary {
         add_action( 'aiss_daily_log_purge', array( $this, 'run_scheduled_purge' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
         add_action( 'admin_print_styles-index.php', array( $this, 'enqueue_dashboard_widget_css' ) );
+        add_action( 'widgets_init', array( $this, 'register_trending_widget' ) );
+        add_shortcode( 'aiss_trending', array( $this, 'render_trending_shortcode' ) );
 
         add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), array( $this, 'add_plugin_settings_link' ) );
     }
@@ -4572,6 +4574,286 @@ class AI_Search_Summary {
         $html .= '</ul></div>';
 
         return $html;
+    }
+
+    /* ---------------------------------------------------------
+     *  Trending Searches Widget & Shortcode
+     * --------------------------------------------------------- */
+
+    /**
+     * Register the trending searches widget.
+     */
+    public function register_trending_widget() {
+        register_widget( 'AISS_Trending_Widget' );
+    }
+
+    /**
+     * Render the trending searches shortcode.
+     *
+     * Usage: [aiss_trending limit="5" title="Trending Searches"]
+     *
+     * @param array $atts Shortcode attributes.
+     * @return string HTML output.
+     */
+    public function render_trending_shortcode( $atts ) {
+        $atts = shortcode_atts( array(
+            'limit' => 5,
+            'title' => '',
+        ), $atts, 'aiss_trending' );
+
+        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'] );
+    }
+
+    /**
+     * Get trending search keywords from the last 24 hours.
+     *
+     * @param int $limit Number of keywords to return.
+     * @return array Array of trending keywords with counts.
+     */
+    public function get_trending_keywords( $limit = 5 ) {
+        if ( ! $this->logs_table_is_available() ) {
+            return array();
+        }
+
+        global $wpdb;
+        $table_escaped = self::get_escaped_table_name();
+        $since_24h     = gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS );
+
+        $results = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT search_query, COUNT(*) AS search_count
+                 FROM {$table_escaped}
+                 WHERE created_at >= %s
+                   AND results_count > 0
+                   AND ai_success = 1
+                 GROUP BY search_query
+                 ORDER BY search_count DESC
+                 LIMIT %d",
+                $since_24h,
+                $limit
+            )
+        );
+
+        return $results ? $results : array();
+    }
+
+    /**
+     * Render trending searches HTML.
+     *
+     * @param int    $limit Number of keywords to show.
+     * @param string $title Optional title.
+     * @return string HTML output.
+     */
+    public function render_trending_searches( $limit = 5, $title = '' ) {
+        $keywords = $this->get_trending_keywords( $limit );
+        $options  = $this->get_options();
+
+        // Get colors from settings
+        $bg_color     = isset( $options['color_background'] ) ? $options['color_background'] : '#121e2b';
+        $text_color   = isset( $options['color_text'] ) ? $options['color_text'] : '#e5e7eb';
+        $accent_color = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
+        $border_color = isset( $options['color_border'] ) ? $options['color_border'] : '#94a3b8';
+
+        if ( empty( $keywords ) ) {
+            return '';
+        }
+
+        $html = '<div class="aiss-trending-widget" style="
+            background: ' . esc_attr( $bg_color ) . ';
+            color: ' . esc_attr( $text_color ) . ';
+            border: 1px solid ' . esc_attr( $border_color ) . ';
+            border-radius: 12px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Oxygen, Ubuntu, sans-serif;
+        ">';
+
+        if ( ! empty( $title ) ) {
+            $html .= '<h3 class="aiss-trending-title" style="
+                margin: 0 0 16px 0;
+                font-size: 16px;
+                font-weight: 600;
+                color: ' . esc_attr( $text_color ) . ';
+            ">' . esc_html( $title ) . '</h3>';
+        }
+
+        $html .= '<ul class="aiss-trending-list" style="
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        ">';
+
+        $total = count( $keywords );
+        foreach ( $keywords as $index => $keyword ) {
+            $search_url = home_url( '/?s=' . urlencode( $keyword->search_query ) );
+            $is_first   = $index === 0;
+            $is_last    = $index === $total - 1;
+
+            $html .= '<li class="aiss-trending-item" style="
+                ' . ( ! $is_last ? 'margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid ' . esc_attr( $border_color ) . '33;' : '' ) . '
+            ">';
+
+            $html .= '<a href="' . esc_url( $search_url ) . '" class="aiss-trending-link" style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                text-decoration: none;
+                color: inherit;
+                gap: 12px;
+            ">';
+
+            $html .= '<span class="aiss-trending-query" style="
+                flex: 1;
+                font-size: 14px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                ' . ( $is_first ? 'font-weight: 600; color: ' . esc_attr( $accent_color ) . ';' : '' ) . '
+            ">' . esc_html( $keyword->search_query ) . '</span>';
+
+            $html .= '<span class="aiss-trending-count" style="
+                background: ' . esc_attr( $accent_color ) . '22;
+                color: ' . esc_attr( $accent_color ) . ';
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 12px;
+                white-space: nowrap;
+            ">' . esc_html( $keyword->search_count ) . '</span>';
+
+            $html .= '</a></li>';
+        }
+
+        $html .= '</ul></div>';
+
+        // Add responsive styles
+        $html .= '<style>
+            .aiss-trending-widget {
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            .aiss-trending-link:hover .aiss-trending-query {
+                text-decoration: underline;
+            }
+            @media (max-width: 480px) {
+                .aiss-trending-widget {
+                    padding: 16px !important;
+                    border-radius: 8px !important;
+                }
+                .aiss-trending-title {
+                    font-size: 14px !important;
+                    margin-bottom: 12px !important;
+                }
+                .aiss-trending-item {
+                    margin-bottom: 10px !important;
+                    padding-bottom: 10px !important;
+                }
+                .aiss-trending-query {
+                    font-size: 13px !important;
+                }
+                .aiss-trending-count {
+                    font-size: 11px !important;
+                    padding: 3px 6px !important;
+                }
+            }
+        </style>';
+
+        return $html;
+    }
+}
+
+/**
+ * Trending Searches Widget Class.
+ */
+class AISS_Trending_Widget extends WP_Widget {
+
+    /**
+     * Constructor.
+     */
+    public function __construct() {
+        parent::__construct(
+            'aiss_trending_widget',
+            'AI Search - Trending Searches',
+            array(
+                'description' => 'Display trending search keywords from the last 24 hours.',
+                'classname'   => 'aiss-trending-widget-container',
+            )
+        );
+    }
+
+    /**
+     * Front-end display of the widget.
+     *
+     * @param array $args     Widget arguments.
+     * @param array $instance Saved values from database.
+     */
+    public function widget( $args, $instance ) {
+        $title = ! empty( $instance['title'] ) ? $instance['title'] : '';
+        $limit = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+
+        // Get the main plugin instance
+        global $aiss_instance;
+        if ( ! isset( $aiss_instance ) ) {
+            $aiss_instance = new AI_Search_Summary();
+        }
+
+        $content = $aiss_instance->render_trending_searches( $limit, $title );
+
+        if ( empty( $content ) ) {
+            return; // Don't show widget if no trending searches
+        }
+
+        echo $args['before_widget'];
+        echo $content;
+        echo $args['after_widget'];
+    }
+
+    /**
+     * Back-end widget form.
+     *
+     * @param array $instance Previously saved values from database.
+     */
+    public function form( $instance ) {
+        $title = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
+        $limit = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        ?>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">Title:</label>
+            <input class="widefat"
+                   id="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'title' ) ); ?>"
+                   type="text"
+                   value="<?php echo esc_attr( $title ); ?>">
+        </p>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'limit' ) ); ?>">Number of searches to show:</label>
+            <input class="tiny-text"
+                   id="<?php echo esc_attr( $this->get_field_id( 'limit' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'limit' ) ); ?>"
+                   type="number"
+                   min="1"
+                   max="20"
+                   value="<?php echo esc_attr( $limit ); ?>">
+        </p>
+        <p class="description">
+            Uses colors from AI Search Summary settings.<br>
+            Shortcode: <code>[aiss_trending limit="5" title="Trending"]</code>
+        </p>
+        <?php
+    }
+
+    /**
+     * Sanitize widget form values as they are saved.
+     *
+     * @param array $new_instance Values just sent to be saved.
+     * @param array $old_instance Previously saved values from database.
+     * @return array Updated safe values to be saved.
+     */
+    public function update( $new_instance, $old_instance ) {
+        $instance          = array();
+        $instance['title'] = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
+        $instance['limit'] = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
+
+        return $instance;
     }
 }
 
