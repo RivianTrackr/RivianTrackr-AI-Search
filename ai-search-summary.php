@@ -4600,9 +4600,10 @@ class AI_Search_Summary {
             'limit'    => 5,
             'title'    => '',
             'subtitle' => '',
+            'color'    => '',
         ), $atts, 'aiss_trending' );
 
-        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'] );
+        return $this->render_trending_searches( (int) $atts['limit'], $atts['title'], $atts['subtitle'], $atts['color'] );
     }
 
     /**
@@ -4644,14 +4645,17 @@ class AI_Search_Summary {
      * @param int    $limit Number of keywords to show.
      * @param string $title Optional title.
      * @param string $subtitle Optional subtitle/description.
+     * @param string $bg_color Optional background color (hex).
      * @return string HTML output.
      */
-    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '' ) {
+    public function render_trending_searches( $limit = 5, $title = '', $subtitle = '', $bg_color = '' ) {
         $keywords = $this->get_trending_keywords( $limit );
         $options  = $this->get_options();
 
-        // Get accent color from settings for background
-        $accent_color = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
+        // Use provided background color, fall back to accent color from settings
+        if ( empty( $bg_color ) ) {
+            $bg_color = isset( $options['color_accent'] ) ? $options['color_accent'] : '#fba919';
+        }
 
         if ( empty( $keywords ) ) {
             return '';
@@ -4666,7 +4670,7 @@ class AI_Search_Summary {
         $icon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 32px; height: 32px;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
 
         $html = '<div class="aiss-trending-widget" style="
-            background: ' . esc_attr( $accent_color ) . ';
+            background: ' . esc_attr( $bg_color ) . ';
             color: #1a1a1a;
             border-radius: 20px;
             padding: 24px;
@@ -4720,49 +4724,24 @@ class AI_Search_Summary {
             gap: 8px;
         ">';
 
-        foreach ( $keywords as $index => $keyword ) {
+        foreach ( $keywords as $keyword ) {
             $search_url = home_url( '/?s=' . urlencode( $keyword->search_query ) );
-            $rank = $index + 1;
 
             $html .= '<li class="aiss-trending-item">';
             $html .= '<a href="' . esc_url( $search_url ) . '" class="aiss-trending-link" style="
-                display: flex;
-                align-items: center;
-                gap: 12px;
+                display: block;
                 text-decoration: none;
                 color: #1a1a1a;
                 padding: 10px 14px;
                 background: rgba(0, 0, 0, 0.08);
                 border-radius: 12px;
                 transition: background 0.15s ease;
-            ">';
-
-            // Rank number
-            $html .= '<span class="aiss-trending-rank" style="
-                font-size: 14px;
-                font-weight: 700;
-                opacity: 0.6;
-                min-width: 20px;
-            ">' . esc_html( $rank ) . '</span>';
-
-            // Query text
-            $html .= '<span class="aiss-trending-query" style="
-                flex: 1;
                 font-size: 15px;
                 font-weight: 500;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-            ">' . esc_html( $keyword->search_query ) . '</span>';
-
-            // Search count
-            $html .= '<span class="aiss-trending-count" style="
-                font-size: 13px;
-                font-weight: 600;
-                opacity: 0.7;
-            ">' . esc_html( $keyword->search_count ) . '</span>';
-
-            $html .= '</a></li>';
+            ">' . esc_html( $keyword->search_query ) . '</a></li>';
         }
 
         $html .= '</ul></div>';
@@ -4837,6 +4816,7 @@ class AISS_Trending_Widget extends WP_Widget {
         $title    = ! empty( $instance['title'] ) ? $instance['title'] : '';
         $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : '';
         $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '';
 
         // Get the main plugin instance
         global $aiss_instance;
@@ -4844,7 +4824,7 @@ class AISS_Trending_Widget extends WP_Widget {
             $aiss_instance = new AI_Search_Summary();
         }
 
-        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle );
+        $content = $aiss_instance->render_trending_searches( $limit, $title, $subtitle, $bg_color );
 
         if ( empty( $content ) ) {
             return; // Don't show widget if no trending searches
@@ -4864,6 +4844,7 @@ class AISS_Trending_Widget extends WP_Widget {
         $title    = ! empty( $instance['title'] ) ? $instance['title'] : 'Trending Searches';
         $subtitle = ! empty( $instance['subtitle'] ) ? $instance['subtitle'] : 'Popular searches in the last 24 hours';
         $limit    = ! empty( $instance['limit'] ) ? (int) $instance['limit'] : 5;
+        $bg_color = ! empty( $instance['bg_color'] ) ? $instance['bg_color'] : '#fba919';
         ?>
         <p>
             <label for="<?php echo esc_attr( $this->get_field_id( 'title' ) ); ?>">Title:</label>
@@ -4891,9 +4872,26 @@ class AISS_Trending_Widget extends WP_Widget {
                    max="20"
                    value="<?php echo esc_attr( $limit ); ?>">
         </p>
+        <p>
+            <label for="<?php echo esc_attr( $this->get_field_id( 'bg_color' ) ); ?>">Background Color:</label><br>
+            <input id="<?php echo esc_attr( $this->get_field_id( 'bg_color' ) ); ?>"
+                   name="<?php echo esc_attr( $this->get_field_name( 'bg_color' ) ); ?>"
+                   type="color"
+                   value="<?php echo esc_attr( $bg_color ); ?>"
+                   style="width: 50px; height: 30px; padding: 0; border: 1px solid #ccc; cursor: pointer;">
+            <input type="text"
+                   id="<?php echo esc_attr( $this->get_field_id( 'bg_color_text' ) ); ?>"
+                   value="<?php echo esc_attr( $bg_color ); ?>"
+                   style="width: 80px; margin-left: 8px;"
+                   onchange="document.getElementById('<?php echo esc_attr( $this->get_field_id( 'bg_color' ) ); ?>').value = this.value;">
+            <script>
+            document.getElementById('<?php echo esc_attr( $this->get_field_id( 'bg_color' ) ); ?>').addEventListener('input', function() {
+                document.getElementById('<?php echo esc_attr( $this->get_field_id( 'bg_color_text' ) ); ?>').value = this.value;
+            });
+            </script>
+        </p>
         <p class="description">
-            Uses accent color from AI Search Summary settings.<br>
-            Shortcode: <code>[aiss_trending limit="5" title="Trending" subtitle="Popular searches"]</code>
+            Shortcode: <code>[aiss_trending limit="5" color="#fba919"]</code>
         </p>
         <?php
     }
@@ -4910,6 +4908,7 @@ class AISS_Trending_Widget extends WP_Widget {
         $instance['title']    = ! empty( $new_instance['title'] ) ? sanitize_text_field( $new_instance['title'] ) : '';
         $instance['subtitle'] = ! empty( $new_instance['subtitle'] ) ? sanitize_text_field( $new_instance['subtitle'] ) : '';
         $instance['limit']    = ! empty( $new_instance['limit'] ) ? min( 20, max( 1, (int) $new_instance['limit'] ) ) : 5;
+        $instance['bg_color'] = ! empty( $new_instance['bg_color'] ) ? sanitize_hex_color( $new_instance['bg_color'] ) : '#fba919';
 
         return $instance;
     }
