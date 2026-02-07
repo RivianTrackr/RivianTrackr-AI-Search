@@ -4674,8 +4674,8 @@ class AI_Search_Summary {
         }
 
         // Font Awesome icon (primary) and SVG fallback
-        $icon_fa = '<i class="fa-solid fa-magnifying-glass aiss-trending-fa-icon" style="font-size: 32px; opacity: 0.9; flex-shrink: 0; width: 48px; text-align: center; display: none;"></i>';
-        $icon_svg = '<svg class="aiss-trending-svg-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 32px; height: 32px; opacity: 0.9;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+        $icon_fa = '<i class="fa-solid fa-magnifying-glass aiss-trending-fa-icon" style="font-size: 48px; opacity: 0.9; flex-shrink: 0; width: 48px; text-align: center; display: none;"></i>';
+        $icon_svg = '<svg class="aiss-trending-svg-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width: 48px; height: 48px; opacity: 0.9;"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
 
         $html = '<div class="aiss-trending-widget" style="
             background: ' . esc_attr( $bg_color ) . ';
@@ -4774,15 +4774,15 @@ class AI_Search_Summary {
                     margin-bottom: 16px !important;
                 }
                 .aiss-trending-icon {
-                    width: 40px !important;
+                    width: 36px !important;
                 }
                 .aiss-trending-icon svg {
-                    width: 28px !important;
-                    height: 28px !important;
+                    width: 36px !important;
+                    height: 36px !important;
                 }
                 .aiss-trending-icon .aiss-trending-fa-icon {
-                    font-size: 28px !important;
-                    width: 40px !important;
+                    font-size: 36px !important;
+                    width: 36px !important;
                 }
                 .aiss-trending-title {
                     font-size: 18px !important;
